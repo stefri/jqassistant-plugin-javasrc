@@ -1,0 +1,37 @@
+# Eclipse
+.settings
+.metadata
+.history
+Servers
+bin
+.scala_dependencies
+.target
+.cache
+
+# Intellij Idea
+.idea
+.idea_modules
+*.iml
+
+# Simple Build Tool
+lib_managed/
+project/boot/
+project/build/target/
+project/plugins/project/build.properties
+src_managed/
+target
+tmp
+
+# Mac OSX
+.DS_Store
+
+# Vi
+*.swp
+*.un~
+
+# TextMate
+*.tmproj
+tmtags
+
+# Node
+node_modules
