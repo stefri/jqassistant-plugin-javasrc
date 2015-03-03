@@ -25,7 +25,6 @@ import de.uniulm.iai.comma.model._
 import de.uniulm.iai.jqassistant.javasrc.plugin.model._
 import org.antlr.runtime.tree.Tree
 
-import scala.annotation.tailrec
 import scala.collection.JavaConversions._
 
 
@@ -35,7 +34,7 @@ import scala.collection.JavaConversions._
  * a measure that holds if applied in a sub-structural context.
  */
 class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUnitDescriptor, context: ScannerContext)
-    extends TreeVisitor {
+  extends TreeVisitor with VisitorHelper {
 
   /** Internal storage for all registered artifact type visitor factories */
   private val visitorFactories =
@@ -62,11 +61,11 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
   /** This is an internal class to store information about the source structure while parsing the source file. */
   private class Structure(
-      val node: EnhancedCommonTree,
-      val name: String,
-      val descriptor: Descriptor,
-      val parent: Option[Structure],
-      val visitors: Set[TreeVisitor]) {
+                           val node: EnhancedCommonTree,
+                           val name: String,
+                           val descriptor: Descriptor,
+                           val parent: Option[Structure],
+                           val visitors: Set[TreeVisitor]) {
 
     /** Anonymous inner classes are numbered based on this counter which is reset for each structure */
     private var anonCount = 0
@@ -175,260 +174,255 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
     // Evaluate node type to build source structure
     node.getType match {
-        case PACKAGE => {
-          packageName = Some(
-            stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", "."))
+      case PACKAGE => {
+        packageName = Some(
+          stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", "."))
+      }
+
+      case CLASS_DECLARATION
+           | INTERFACE
+           | ENUM
+           | ANNOTATION_DECL => {
+
+        // Lookup parent
+        val parent = if (structureStack.isEmpty) None else Some(structureStack.top)
+
+        // Create new structure
+        val className = findIdentifier(node).map(_.getText).getOrElse("[NO IDENTIFIER FOUND]")
+
+        val fullClassName = parent.map(_.name + "." + className).getOrElse {
+          packageName.map(_ + "." + className).getOrElse(className)
         }
 
-        case CLASS_DECLARATION
-          | INTERFACE
-          | ENUM
-          | ANNOTATION_DECL => {
-
-          // Lookup parent
-          val parent = if (structureStack.isEmpty) None else Some(structureStack.top)
-
-          // Create new structure
-          val className = findIdentifier(node) match {
-            case Some(n) => n.getText
-            case None    => "[NO IDENTIFIER FOUND]"
-          }
-          val fullClassName = parent match {
-            case Some(p) => p.name + "." + className
-            case None    => packageName match {
-              case Some(p) => p + "." + className
-              case None    => className
+        // If a parent is present, store as inner class otherwise as first order class or as main class
+        val structure = parent match {
+          case Some(p) => {
+            // Determine inner artifact types
+            val classType = node.getType match {
+              case CLASS_DECLARATION  => (ArtifactType.INNER_CLASS, classOf[ClassDescriptor])
+              case INTERFACE          => (ArtifactType.INNER_INTERFACE, classOf[InterfaceDescriptor])
+              case ENUM               => (ArtifactType.INNER_ENUM, classOf[EnumDescriptor])
+              case ANNOTATION_DECL    => (ArtifactType.INNER_ANNOTATION, classOf[AnnotationDescriptor])
+              case _ => throw new IllegalStateException("Unexpected inner class type: " + node.getType)
             }
+
+            val visibility = detectVisibility(node)
+
+            val descr = context.getStore.create(classType._2)
+            descr.setDeclarationUnit(compilationUnit)
+            descr.setDeclaringType(p.descriptor.asInstanceOf[TypeDescriptor])
+            descr.setName(className)
+            descr.setFullQualifiedName(fullClassName)
+            descr.setStartLineNumber(node.getLine)
+            descr.setEndLineNumber(node.getLastLine)
+            descr.setVisibility(visibility.name)
+            descr.setFinal(detectFinal(node))
+            descr.setStatic(detectStatic(node))
+            descr.setAbstract(detectAbstract(node))
+
+            val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
+            new Structure(node, fullClassName, descr, parent, visitors)
           }
 
-          // If a parent is present, store as inner class otherwise as first order class or as main class
-          val structure = parent match {
-            case Some(p) => {
-              // Determine inner artifact types
-              val classType = node.getType match {
-                case CLASS_DECLARATION  => (ArtifactType.INNER_CLASS, classOf[ClassDescriptor])
-                case INTERFACE          => (ArtifactType.INNER_INTERFACE, classOf[InterfaceDescriptor])
-                case ENUM               => (ArtifactType.INNER_ENUM, classOf[EnumDescriptor])
-                case ANNOTATION_DECL    => (ArtifactType.INNER_ANNOTATION, classOf[AnnotationDescriptor])
-                case _ => throw new IllegalStateException("Unexpected inner class type: " + node.getType)
-              }
+          case None    =>
+            // This is because there might be more than one java class definition on the outmost level
+            if (changedEntity.path.endsWith("/" + className + ".java")) {
 
-              val visibility = detectVisibility(node)
+              // Determine artifact types
+              val classType = node.getType match {
+                case CLASS_DECLARATION  => (ArtifactType.ARTIFACT_CLASS, classOf[ClassDescriptor])
+                case INTERFACE          => (ArtifactType.ARTIFACT_INTERFACE, classOf[InterfaceDescriptor])
+                case ENUM               => (ArtifactType.ARTIFACT_ENUM, classOf[EnumDescriptor])
+                case ANNOTATION_DECL    => (ArtifactType.ARTIFACT_ANNOTATION, classOf[AnnotationDescriptor])
+                case _ => throw new IllegalStateException("Unexpected main class type: " + node.getType)
+              }
 
               val descr = context.getStore.create(classType._2)
               descr.setDeclarationUnit(compilationUnit)
-              descr.setDeclaringType(p.descriptor.asInstanceOf[TypeDescriptor])
               descr.setName(className)
               descr.setFullQualifiedName(fullClassName)
               descr.setStartLineNumber(node.getLine)
               descr.setEndLineNumber(node.getLastLine)
-              descr.setVisibility(visibility.name)
+              descr.setVisibility(detectVisibility(node).name)
+              descr.setFinal(detectFinal(node))
+              descr.setStatic(detectStatic(node))
+              descr.setAbstract(detectAbstract(node))
+              compilationUnit.setMainType(descr)
+
+              val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
+              new Structure(node, fullClassName, descr, None, visitors)
+
+            } else {
+
+              // Determine artifact types
+              val classType = node.getType match {
+                case CLASS_DECLARATION  => (ArtifactType.CLASS, classOf[ClassDescriptor])
+                case INTERFACE          => (ArtifactType.INTERFACE, classOf[InterfaceDescriptor])
+                case ENUM               => (ArtifactType.ENUM, classOf[EnumDescriptor])
+                case ANNOTATION_DECL    => (ArtifactType.ANNOTATION, classOf[AnnotationDescriptor])
+                case _ => throw new IllegalStateException("Unexpected class type: " + node.getType)
+              }
+
+              val descr = context.getStore.create(classType._2)
+              descr.setDeclarationUnit(compilationUnit)
+              descr.setName(className)
+              descr.setFullQualifiedName(fullClassName)
+              descr.setStartLineNumber(node.getLine)
+              descr.setEndLineNumber(node.getLastLine)
+              descr.setVisibility(detectVisibility(node).name)
               descr.setFinal(detectFinal(node))
               descr.setStatic(detectStatic(node))
               descr.setAbstract(detectAbstract(node))
 
               val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
-              new Structure(node, fullClassName, descr, parent, visitors)
+              new Structure(node, fullClassName, descr, None, visitors)
             }
-
-            case None    =>
-              // This is because there might be more than one java class definition on the outmost level
-              if (changedEntity.path.endsWith("/" + className + ".java")) {
-
-                // Determine artifact types
-                val classType = node.getType match {
-                  case CLASS_DECLARATION  => (ArtifactType.ARTIFACT_CLASS, classOf[ClassDescriptor])
-                  case INTERFACE          => (ArtifactType.ARTIFACT_INTERFACE, classOf[InterfaceDescriptor])
-                  case ENUM               => (ArtifactType.ARTIFACT_ENUM, classOf[EnumDescriptor])
-                  case ANNOTATION_DECL    => (ArtifactType.ARTIFACT_ANNOTATION, classOf[AnnotationDescriptor])
-                  case _ => throw new IllegalStateException("Unexpected main class type: " + node.getType)
-                }
-
-                val descr = context.getStore.create(classType._2)
-                descr.setDeclarationUnit(compilationUnit)
-                descr.setName(className)
-                descr.setFullQualifiedName(fullClassName)
-                descr.setStartLineNumber(node.getLine)
-                descr.setEndLineNumber(node.getLastLine)
-                descr.setVisibility(detectVisibility(node).name)
-                descr.setFinal(detectFinal(node))
-                descr.setStatic(detectStatic(node))
-                descr.setAbstract(detectAbstract(node))
-                compilationUnit.setMainType(descr)
-
-                val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
-                new Structure(node, fullClassName, descr, None, visitors)
-
-              } else {
-
-                // Determine artifact types
-                val classType = node.getType match {
-                  case CLASS_DECLARATION  => (ArtifactType.CLASS, classOf[ClassDescriptor])
-                  case INTERFACE          => (ArtifactType.INTERFACE, classOf[InterfaceDescriptor])
-                  case ENUM               => (ArtifactType.ENUM, classOf[EnumDescriptor])
-                  case ANNOTATION_DECL    => (ArtifactType.ANNOTATION, classOf[AnnotationDescriptor])
-                  case _ => throw new IllegalStateException("Unexpected class type: " + node.getType)
-                }
-
-                val descr = context.getStore.create(classType._2)
-                descr.setDeclarationUnit(compilationUnit)
-                descr.setName(className)
-                descr.setFullQualifiedName(fullClassName)
-                descr.setStartLineNumber(node.getLine)
-                descr.setEndLineNumber(node.getLastLine)
-                descr.setVisibility(detectVisibility(node).name)
-                descr.setFinal(detectFinal(node))
-                descr.setStatic(detectStatic(node))
-                descr.setAbstract(detectAbstract(node))
-
-                val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
-                new Structure(node, fullClassName, descr, None, visitors)
-              }
-          }
-
-          structures(node) = structure
-          structureStack.push(structure)
         }
 
-        case ENUM_CLASS_BODY => {
-          val enumDecl = node.getParent
+        structures(node) = structure
+        structureStack.push(structure)
+      }
 
-          // Lookup parent
-          val parent = structureStack.top
+      case ENUM_CLASS_BODY => {
+        val enumDecl = node.getParent
 
-          // Lookup enum identifier
-          val enumName = findIdentifier(enumDecl) match {
-            case Some(i) => parent.name + "." + i.getText
-            case None    => parent.name + ".[NO IDENTIFIER FOUND]"
-          }
+        // Lookup parent
+        val parent = structureStack.top
 
-          // Create new structure
-          val descr = context.getStore.create(classOf[EnumConstantDescriptor])
-          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-          descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
-          descr.setName(enumName)
-          descr.setSignature(enumName)
-          descr.setStartLineNumber(node.getLine)
-          descr.setEndLineNumber(node.getLastLine)
-
-          val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, descr, Some(enumName))
-          val structure = new Structure(enumDecl, enumName, descr, Some(parent), visitors)
-          structures(enumDecl) = structure
-          structureStack.push(structure)
+        // Lookup enum identifier
+        val enumName = findIdentifier(enumDecl).map { i =>
+          parent.name + "." + i.getText
+        } getOrElse {
+          parent.name + ".[NO IDENTIFIER FOUND]"
         }
 
-        case CONSTRUCTOR_DECL => {
+        // Create new structure
+        val descr = context.getStore.create(classOf[EnumConstantDescriptor])
+        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+        descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
+        descr.setName(enumName)
+        descr.setSignature(enumName)
+        descr.setStartLineNumber(node.getLine)
+        descr.setEndLineNumber(node.getLastLine)
 
-          // Lookup parent
-          val parent = structureStack.top
+        val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, descr, Some(enumName))
+        val structure = new Structure(enumDecl, enumName, descr, Some(parent), visitors)
+        structures(enumDecl) = structure
+        structureStack.push(structure)
+      }
 
-          // Create new structure
-          val constructorSig =
-            addToSignature(node.getChildren.toIndexedSeq, parent.name)
+      case CONSTRUCTOR_DECL => {
 
-          val descr = context.getStore.create(classOf[ConstructorDescriptor])
-          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-          descr.setName(parent.descriptor.asInstanceOf[TypeDescriptor].getName)
-          descr.setSignature(constructorSig)
-          descr.setAbstract(detectAbstract(node))
-          descr.setFinal(detectFinal(node))
-          descr.setVisibility(detectVisibility(node).name)
-          descr.setStartLineNumber(node.getLine)
-          descr.setEndLineNumber(node.getLastLine)
+        // Lookup parent
+        val parent = structureStack.top
+
+        // Create new structure
+        val constructorSig =
+          addToSignature(node.getChildren.toIndexedSeq, parent.name)
+
+        val descr = context.getStore.create(classOf[ConstructorDescriptor])
+        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+        descr.setName(parent.descriptor.asInstanceOf[TypeDescriptor].getName)
+        descr.setSignature(constructorSig)
+        descr.setAbstract(detectAbstract(node))
+        descr.setFinal(detectFinal(node))
+        descr.setVisibility(detectVisibility(node).name)
+        descr.setStartLineNumber(node.getLine)
+        descr.setEndLineNumber(node.getLastLine)
 
 
-          val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, descr, Some(constructorSig))
-          val structure = new Structure(node, constructorSig, descr, Some(parent), visitors)
-          structures(node) = structure
-          structureStack.push(structure)
-        }
+        val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, descr, Some(constructorSig))
+        val structure = new Structure(node, constructorSig, descr, Some(parent), visitors)
+        structures(node) = structure
+        structureStack.push(structure)
+      }
 
-        case ANONYMOUS_CLASS_CONSTRUCTOR_CALL => {
+      case ANONYMOUS_CLASS_CONSTRUCTOR_CALL => {
 
-          // Lookup parent
-          val parent = structureStack.top
+        // Lookup parent
+        val parent = structureStack.top
 
-          // Create new structure
-          val parentSimpleClassName = parent.descriptor.asInstanceOf[TypeDescriptor].getName
+        // Create new structure
+        val parentSimpleClassName = parent.descriptor.asInstanceOf[TypeDescriptor].getName
 
-          val descr = context.getStore.create(classOf[AnonymousClassDescriptor])
-          descr.setDeclarationUnit(compilationUnit)
-          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-          descr.setIndex(parent.anonClassCount)
-          descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
-          descr.setFullQualifiedName(s"${parent.name}.ANON[${descr.getIndex}]")
-          descr.setStartLineNumber(node.getLine)
-          descr.setEndLineNumber(node.getLastLine)
+        val descr = context.getStore.create(classOf[AnonymousClassDescriptor])
+        descr.setDeclarationUnit(compilationUnit)
+        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+        descr.setIndex(parent.anonClassCount)
+        descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
+        descr.setFullQualifiedName(s"${parent.name}.ANON[${descr.getIndex}]")
+        descr.setStartLineNumber(node.getLine)
+        descr.setEndLineNumber(node.getLastLine)
 
-          val visitors =
-            createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, descr, Some(descr.getFullQualifiedName))
-          val structure = new Structure(node, descr.getFullQualifiedName, descr, Some(parent), visitors)
-          structures(node) = structure
-          structureStack.push(structure)
-        }
+        val visitors =
+          createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, descr, Some(descr.getFullQualifiedName))
+        val structure = new Structure(node, descr.getFullQualifiedName, descr, Some(parent), visitors)
+        structures(node) = structure
+        structureStack.push(structure)
+      }
 
-        case VOID_METHOD_DECL
-          | FUNCTION_METHOD_DECL
-          | ANNOTATION_METHOD_DECL => {
+      case VOID_METHOD_DECL
+           | FUNCTION_METHOD_DECL
+           | ANNOTATION_METHOD_DECL => {
 
-          // Lookup parent
-          val parent = structureStack.top
+        // Lookup parent
+        val parent = structureStack.top
 
-          // Create new structure
-          val methodName =
-            addToSignature(node.getChildren.toIndexedSeq, parent.name + ".")
+        // Create new structure
+        val methodName =
+          addToSignature(node.getChildren.toIndexedSeq, parent.name + ".")
 
-          val descr = context.getStore.create(classOf[MethodDescriptor])
-          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-          descr.setSignature(methodName)
-          descr.setName(getFunctionIdentifier(node.getChildren.toIndexedSeq))
-          descr.setAbstract(detectAbstract(node))
-          descr.setFinal(detectFinal(node))
-          descr.setVisibility(detectVisibility(node).name)
-          descr.setStatic(detectStatic(node))
-          descr.setStartLineNumber(node.getLine)
-          descr.setEndLineNumber(node.getLastLine)
+        val descr = context.getStore.create(classOf[MethodDescriptor])
+        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+        descr.setSignature(methodName)
+        descr.setName(getFunctionIdentifier(node.getChildren.toIndexedSeq))
+        descr.setAbstract(detectAbstract(node))
+        descr.setFinal(detectFinal(node))
+        descr.setVisibility(detectVisibility(node).name)
+        descr.setStatic(detectStatic(node))
+        descr.setStartLineNumber(node.getLine)
+        descr.setEndLineNumber(node.getLastLine)
 
-          val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, descr, Some(methodName))
-          val structure = new Structure(node, methodName, descr, Some(parent), visitors)
-          structures(node) = structure
-          structureStack.push(structure)
-        }
+        val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, descr, Some(methodName))
+        val structure = new Structure(node, methodName, descr, Some(parent), visitors)
+        structures(node) = structure
+        structureStack.push(structure)
+      }
 
-        case VAR_DECLARATION => {
-          val parent = structureStack.top
+      case VAR_DECLARATION => {
+        val parent = structureStack.top
 
-          // Only include fields and no variable declarations inside of methods!
-          if (parent.descriptor.isInstanceOf[TypeDescriptor]) {
-            val visibility = detectVisibility(node).name
-            val isFinal = detectFinal(node)
-            val isStatic = detectStatic(node)
-            val isTransient = detectTransient(node)
-            val isVolatile = detectVolatile(node)
-            val fieldType = detectType(node)
-            val fieldNameNodes = detectVariableDeclarators(node)
+        // Only include fields and no variable declarations inside of methods!
+        if (parent.descriptor.isInstanceOf[TypeDescriptor]) {
+          val visibility = detectVisibility(node).name
+          val isFinal = detectFinal(node)
+          val isStatic = detectStatic(node)
+          val isTransient = detectTransient(node)
+          val isVolatile = detectVolatile(node)
+          val fieldType = detectType(node)
+          val fieldNameNodes = detectVariableDeclarators(node)
 
-            fieldNameNodes.foreach { n =>
-              val descr = context.getStore.create(classOf[FieldDescriptor])
-              descr.setDeclaringType(parent.descriptor.asInstanceOf[JavaSourceDescriptor])
-              descr.setName(n.getChild(0).getText)
-              descr.setVisibility(visibility)
-              descr.setFinal(isFinal)
-              descr.setStatic(isStatic)
-              descr.setTransient(isTransient)
-              descr.setVolatile(isVolatile)
-              descr.setStartLineNumber(node.getLine)
+          fieldNameNodes.foreach { n =>
+            val descr = context.getStore.create(classOf[FieldDescriptor])
+            descr.setDeclaringType(parent.descriptor.asInstanceOf[JavaSourceDescriptor])
+            descr.setName(n.getChild(0).getText)
+            descr.setVisibility(visibility)
+            descr.setFinal(isFinal)
+            descr.setStatic(isStatic)
+            descr.setTransient(isTransient)
+            descr.setVolatile(isVolatile)
+            descr.setStartLineNumber(node.getLine)
 
-              val typeDescr = context.getStore.create(classOf[IncompleteTypeDescriptor])
-              typeDescr.setName(fieldType.get.getText)
-              typeDescr.setFullQualifiedName(fieldType.get.getText)
-              descr.setType(typeDescr)
-            }
+            val typeDescr = context.getStore.create(classOf[IncompleteTypeDescriptor])
+            typeDescr.setName(fieldType.get.getText)
+            typeDescr.setFullQualifiedName(fieldType.get.getText)
+            descr.setType(typeDescr)
           }
         }
+      }
 
 
-        case _ => // Silently ignore all other tokens
+      case _ => // Silently ignore all other tokens
     }
 
     // Add comment count and length to top most structure on stack, because this can not be covered by comment visitor
@@ -547,194 +541,4 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
     }.toSet
   }
 
-  @tailrec
-  private def getFunctionIdentifier(nodes: IndexedSeq[EnhancedCommonTree]): String = {
-    if (nodes.isEmpty) return "()"
-
-    nodes.get(0).getType match {
-      case IDENT => return nodes.get(0).getText
-      case _ => getFunctionIdentifier(nodes.tail)
-    }
-  }
-
-  @tailrec
-  private def addToSignature(nodes: IndexedSeq[EnhancedCommonTree], signature: String): String = {
-
-    // Special abort case for annotation, since they do not have a formal parameter list!
-    if (nodes.isEmpty) return signature + "()"
-
-    // Find signature
-    nodes.get(0).getType match {
-      case IDENT =>
-        val sig = signature + nodes.get(0).getText
-        addToSignature(nodes.tail, sig)
-      case FORMAL_PARAM_LIST =>
-        val types =
-          if (nodes.get(0).getChildren != null)
-            addToParamList(nodes.get(0).getChildren.toIndexedSeq, "")
-          else ""
-        signature + "(" + types + ")"
-      case _ => addToSignature(nodes.tail, signature)
-    }
-  }
-
-
-  @tailrec
-  private def addToParamList(params: IndexedSeq[EnhancedCommonTree], paramList: String): String = {
-    params.get(0).getType match {
-      case FORMAL_PARAM_VARARG_DECL =>
-        val reversed = stringifyNodes(params.get(0).getChildren.toIndexedSeq, "").split(' ').reverse
-        val param = reversed.updated(1, reversed(1) + "...").reverse.foldLeft("")((cur, elem) => cur + " " + elem)
-        val p = paramList + param
-        if (params.length == 1) p.trim
-        else addToParamList(params.tail, p.trim + ", ")
-      case FORMAL_PARAM_STD_DECL =>
-        val p = paramList + stringifyNodes(params.get(0).getChildren.toIndexedSeq, "")
-        if (params.length == 1) p.trim
-        else addToParamList(params.tail, p.trim + ", ")
-      case _ =>
-        addToParamList(params.tail, paramList.trim)
-    }
-  }
-
-
-  @tailrec
-  private def stringifyNodes(nodes: IndexedSeq[EnhancedCommonTree], text: String): String = {
-    var newText = text
-
-    val node = nodes.get(0)
-    val leftNodes =
-      if (node.getChildren != null) {
-        node.getChildren.toIndexedSeq ++ nodes.tail
-      } else {
-        newText =
-          node.getType match {
-            case LOCAL_MODIFIER_LIST | SEMI => text
-            case SUPER | EXTENDS => text + " " + node.getText
-            case IDENT => {
-              text + {
-                if (!text.isEmpty && text.last != '.' && text.last != '<') " "
-                else ""
-              } + node.getText
-            }
-            case _ => text + node.getText
-          }
-        nodes.tail
-      }
-
-    if (leftNodes.size == 0) newText
-    else stringifyNodes(leftNodes, newText)
-  }
-
-
-  /** Use this method to detect the identifier of a certain node among its children. */
-  private def findIdentifier(node: EnhancedCommonTree): Option[EnhancedCommonTree] = {
-    node.getChildren find { _.getType == IDENT }
-  }
-
-
-  /**
-   * Detect the visibility of a structural node. A structural node might be a
-   * class, interface, enum or annotation or a method call.
-   *
-   * This method does look for a modifier list, if there is none the structure is package-protected
-   * - no keyword is defined at all. If there is a modifier list, it still might contain no children
-   * which results in package-protected visibility, too. Otherwise we look for the actual visibility
-   * modifier and return an appropriate visibility or if none of the standard visibility modifiers
-   * are found we end up with package-protected visibility, again.
-   */
-  private def detectVisibility(node: EnhancedCommonTree): Visibility = {
-    node.getChildren find { _.getType == MODIFIER_LIST } match {
-      case Some(list) => {
-
-        // In case there are no modifiers at all
-        if (list.getChildren == null) return Visibility.DEFAULT
-
-        // Otherwise pick a visibility modifier or return package visibility if there is none specified
-        list.getChildren find {
-          _.getType match {
-            case PUBLIC | PROTECTED | PRIVATE => true
-            case _                            => false
-          }
-        } match {
-          case Some(n) => n.getType match {
-            case PUBLIC    => Visibility.PUBLIC
-            case PROTECTED => Visibility.PROTECTED
-            case PRIVATE   => Visibility.PRIVATE
-            case _         => Visibility.DEFAULT
-          }
-          case None    => Visibility.DEFAULT
-        }
-      }
-      case None       => Visibility.DEFAULT
-    }
-  }
-
-
-  /**
-   * Detect the mutability of a structural node.
-   *
-   * @param node
-   * @return True if it is a final element.
-   */
-  private def detectFinal(node: EnhancedCommonTree): Boolean = detectModifier(node, FINAL)
-
-
-  /**
-   * Determine if the sturctural node is a static artifact.
-   *
-   * @param node
-   * @return True if it is a static element.
-   */
-  private def detectStatic(node: EnhancedCommonTree): Boolean = detectModifier(node, STATIC)
-
-
-  /**
-   * Determine if the structural artifact is abstract.
-   *
-   * @param node
-   * @return True if it is an abstract element.
-   */
-  private def detectAbstract(node: EnhancedCommonTree): Boolean = detectModifier(node, ABSTRACT)
-
-
-  private def detectVolatile(node: EnhancedCommonTree): Boolean = detectModifier(node, VOLATILE)
-
-
-  private def detectTransient(node: EnhancedCommonTree): Boolean = detectModifier(node, TRANSIENT)
-
-
-  private def detectModifier(node: EnhancedCommonTree, modifier: Int): Boolean = {
-    (for {
-      list <- node.getChildren.find(_.getType == MODIFIER_LIST)
-      modNode <- {
-        if (list.getChildren == null) None
-        else list.getChildren.find(_.getType == modifier).headOption
-      }
-    } yield modNode).isDefined
-  }
-
-
-  /**
-   * Determine the type of a field or parameter.
-   *
-   * @param node
-   * @return Type of field or node
-   */
-  private def detectType(node: EnhancedCommonTree): Option[EnhancedCommonTree] = {
-    for {
-      list <- node.getChildren.find(_.getType == TYPE)
-      typeNode <- list.getChildren.headOption
-    } yield typeNode
-  }
-
-
-  private def detectVariableDeclarators(node: EnhancedCommonTree): Iterable[EnhancedCommonTree] = {
-    node.getChildren.find(_.getType == VAR_DECLARATOR_LIST) match {
-      case Some(list) =>
-        if (list.getChildren == null) Seq.empty[EnhancedCommonTree]
-        else list.getChildren.filter(_.getType == VAR_DECLARATOR)
-      case None => Seq.empty[EnhancedCommonTree]
-    }
-  }
 }
