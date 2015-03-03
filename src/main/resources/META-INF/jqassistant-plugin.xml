@@ -8,6 +8,7 @@
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.BlockLineSpanDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.ClassDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.ConstructorDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.DependentDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.EnumDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.EnumConstantDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.FieldDescriptor</class>

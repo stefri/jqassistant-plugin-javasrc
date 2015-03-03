@@ -23,6 +23,8 @@ class PackageVisitor(context: ScannerContext, descriptor: JavaSourceDescriptor)
       case PACKAGE => {
         packageName = Some(stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", "."))
       }
+
+      case _ => // Ignore all other tokens
     }
 
   }

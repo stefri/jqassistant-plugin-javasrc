@@ -88,6 +88,19 @@ class JavaMeasurement(context: ScannerContext,
   // EnumConstant visitors
   structureVisitor.addVisitorFactory(ArtifactType.ENUM_CONST, NcscssVisitor)
 
+
+  /*
+   * Package visitor
+   */
+  val packageVisitor = new PackageVisitor(context, compilationUnitDescriptor)
+  addVisitor(packageVisitor)
+
+  /*
+   * Import visitor
+   */
+  val importVisitor = new ImportVisitor(context, compilationUnitDescriptor)
+  addVisitor(importVisitor)
+
   def run() = {
     runWith(change, code)
     structureVisitor.getArtifacts

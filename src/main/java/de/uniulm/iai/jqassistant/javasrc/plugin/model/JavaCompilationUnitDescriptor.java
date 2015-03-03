@@ -8,6 +8,7 @@ import com.buschmais.xo.neo4j.api.annotation.Property;
 import com.buschmais.xo.neo4j.api.annotation.Relation.Outgoing;
 import de.uniulm.iai.jqassistant.javasrc.plugin.api.annotation.Declares;
 import de.uniulm.iai.jqassistant.javasrc.plugin.api.annotation.IsMainType;
+import de.uniulm.iai.jqassistant.javasrc.plugin.api.annotation.RequiresType;
 
 import java.util.List;
 
@@ -17,8 +18,8 @@ import java.util.List;
  * @author Steffen Kram
  */
 @Label("JavaCompilationUnit")
-public interface JavaCompilationUnitDescriptor
-        extends FileDescriptor, NamedDescriptor, FullQualifiedNameDescriptor, JavaSourceDescriptor {
+public interface JavaCompilationUnitDescriptor extends FileDescriptor, NamedDescriptor, FullQualifiedNameDescriptor,
+        DependentDescriptor, JavaSourceDescriptor {
 
     @Property("mayCompile")
     Boolean isMayCompile();
@@ -35,5 +36,16 @@ public interface JavaCompilationUnitDescriptor
     @Outgoing
     @Declares
     List<TypeDescriptor> getDeclaredTypes();
+
+
+    /**
+     * Return the list of java types required by this artifact (i.e. which are
+     * referenced from it).
+     *
+     * @return The list of required java types.
+     */
+    @Outgoing
+    @RequiresType
+    List<TypeDescriptor> getRequiresTypes();
 
 }
