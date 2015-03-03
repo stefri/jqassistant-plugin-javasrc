@@ -17,6 +17,8 @@
  */
 package de.uniulm.iai.comma.model
 
+import com.buschmais.jqassistant.core.store.api.model.Descriptor
+
 sealed trait ArtifactType extends ArtifactType.Value {
   def name: String
 }
@@ -65,21 +67,17 @@ sealed trait Visibility extends Visibility.Value {
 
 object Visibility extends Enum[Visibility] {
   case object PUBLIC    extends Visibility { val name = "public" }
-  case object PACKAGE   extends Visibility { val name = "package-protected" }
+  case object DEFAULT   extends Visibility { val name = "default" }
   case object PROTECTED extends Visibility { val name = "protected" }
   case object PRIVATE   extends Visibility { val name = "private" }
   case object ANONYMOUS extends Visibility { val name = "anonymous" }
 
-  val values = Vector(PUBLIC, PACKAGE, PROTECTED, PRIVATE, ANONYMOUS)
+  val values = Vector(PUBLIC, DEFAULT, PROTECTED, PRIVATE, ANONYMOUS)
 }
 
 
 case class Artifact(
     artifact: String,
-    artifactType: ArtifactType,
-    visibility: Visibility,
-    lineStart: Int,
-    lineEnd: Int,
-    module: String,
-    artifactUrl: String)
+    artifactFqn: String,
+    descriptor: Descriptor)
 

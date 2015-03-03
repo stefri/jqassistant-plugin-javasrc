@@ -20,19 +20,12 @@ class JavaSourceScannerPlugin extends AbstractScannerPlugin[FileResource, JavaCo
     // Create a node representing the file itself
     val compilationUnitDescriptor = store.create(classOf[JavaCompilationUnitDescriptor])
     compilationUnitDescriptor.setFileName(item.getFile.getName)
+    compilationUnitDescriptor.setMayCompile(true)
 
     // Setup and run java measurement processor
     val reader = new InputStreamReader(item.createStream())
-    val proc = new JavaMeasurement(compilationUnitDescriptor, reader, path)
-    val results = proc.run()
-
-    // Process results
-    results.map { r =>
-      // FIXME
-    }
-
-
-    logger.info(results)
+    val proc = new JavaMeasurement(scanner.getContext, compilationUnitDescriptor, reader, path)
+    proc.run()
 
     compilationUnitDescriptor
   }

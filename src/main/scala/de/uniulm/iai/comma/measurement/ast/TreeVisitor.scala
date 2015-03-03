@@ -20,14 +20,15 @@ package de.uniulm.iai.comma.measurement.ast
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.model.Value
 
-/** This is the main trait to implement for each custom visitor.
-  *
-  * Basically, it defines two methods, the `visit` method is called for each
-  * tree node, so you must handle each node in your implementation. This is
-  * best done with pattern matching. Second, you have to implement the
-  * `measuredValues` method which is called at the end of the tree walk to
-  * collect the gathered values.
-  */
+/**
+ * This is the main trait to implement for each custom visitor.
+ *
+ * Basically, it defines two methods, the `visit` method is called for each
+ * tree node, so you must handle each node in your implementation. This is
+ * best done with pattern matching. Second, you have to implement the
+ * `measuredValues` method which is called at the end of the tree walk to
+ * collect the gathered values.
+ */
 trait TreeVisitor {
 
   def visit(node: EnhancedCommonTree): Unit

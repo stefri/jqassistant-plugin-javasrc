@@ -17,37 +17,42 @@
  */
 package de.uniulm.iai.comma.measurement.ast
 
+import com.buschmais.jqassistant.core.scanner.api.ScannerContext
+import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
 import de.uniulm.iai.comma.lib.ast.javasource.{EnhancedCommonTree, JavaLexer}
 import de.uniulm.iai.comma.model._
-import de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaCompilationUnitDescriptor
+import de.uniulm.iai.jqassistant.javasrc.plugin.model._
 import org.antlr.runtime.tree.Tree
 
 import scala.annotation.tailrec
 import scala.collection.JavaConversions._
 
 
-/** The Structure visitor is a very sophisticated visitor implementation that is capable of dispatching
-  * to numerous sub-visitors. A sub-visitor does implement the same `TreeVisitor` trait. It should compute
-  * a measure that holds if applied in a sub-structural context.
-  */
-class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCompilationUnitDescriptor) extends TreeVisitor {
+/**
+ * The Structure visitor is a very sophisticated visitor implementation that is capable of dispatching
+ * to numerous sub-visitors. A sub-visitor does implement the same `TreeVisitor` trait. It should compute
+ * a measure that holds if applied in a sub-structural context.
+ */
+class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUnitDescriptor, context: ScannerContext)
+    extends TreeVisitor {
 
   /** Internal storage for all registered artifact type visitor factories */
   private val visitorFactories =
     collection.mutable.Map.empty[ArtifactType, collection.mutable.Set[TreeVisitorFactory]]
 
 
-  /** Add a visitor factory for a certain artifact type.
-    *
-    * When the structure visitor does detect an artifact of the given type it uses the
-    * factories `createVisitor` to create a new visitor for the structure that measures
-    * the desired value.
-    *
-    * Note, that this limits the visitors which are applicable to be used with the structure
-    * visitors dispatching mode to those who have a companion object which implements the
-    * `TreeVisitorFactory` trait.
-    */
+  /**
+   * Add a visitor factory for a certain artifact type.
+   *
+   * When the structure visitor does detect an artifact of the given type it uses the
+   * factories `createVisitor` to create a new visitor for the structure that measures
+   * the desired value.
+   *
+   * Note, that this limits the visitors which are applicable to be used with the structure
+   * visitors dispatching mode to those who have a companion object which implements the
+   * `TreeVisitorFactory` trait.
+   */
   def addVisitorFactory(artifactType: ArtifactType, factory: TreeVisitorFactory) = {
     if (!visitorFactories.contains(artifactType)) {
       visitorFactories(artifactType) = collection.mutable.Set.empty[TreeVisitorFactory]
@@ -59,8 +64,7 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
   private class Structure(
       val node: EnhancedCommonTree,
       val name: String,
-      val artifactType: ArtifactType,
-      val visibility: Visibility,
+      val descriptor: Descriptor,
       val parent: Option[Structure],
       val visitors: Set[TreeVisitor]) {
 
@@ -202,15 +206,29 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
             case Some(p) => {
               // Determine inner artifact types
               val classType = node.getType match {
-                case CLASS_DECLARATION  => ArtifactType.INNER_CLASS
-                case INTERFACE          => ArtifactType.INNER_INTERFACE
-                case ENUM               => ArtifactType.INNER_ENUM
-                case ANNOTATION_DECL    => ArtifactType.INNER_ANNOTATION
+                case CLASS_DECLARATION  => (ArtifactType.INNER_CLASS, classOf[ClassDescriptor])
+                case INTERFACE          => (ArtifactType.INNER_INTERFACE, classOf[InterfaceDescriptor])
+                case ENUM               => (ArtifactType.INNER_ENUM, classOf[EnumDescriptor])
+                case ANNOTATION_DECL    => (ArtifactType.INNER_ANNOTATION, classOf[AnnotationDescriptor])
                 case _ => throw new IllegalStateException("Unexpected inner class type: " + node.getType)
               }
 
-              val visitors = createStructureVisitors(classType, changedEntity, Some(fullClassName))
-              new Structure(node, fullClassName, classType, detectVisibility(node), parent, visitors)
+              val visibility = detectVisibility(node)
+
+              val descr = context.getStore.create(classType._2)
+              descr.setDeclarationUnit(compilationUnit)
+              descr.setDeclaringType(p.descriptor.asInstanceOf[TypeDescriptor])
+              descr.setName(className)
+              descr.setFullQualifiedName(fullClassName)
+              descr.setStartLineNumber(node.getLine)
+              descr.setEndLineNumber(node.getLastLine)
+              descr.setVisibility(visibility.name)
+              descr.setFinal(detectFinal(node))
+              descr.setStatic(detectStatic(node))
+              descr.setAbstract(detectAbstract(node))
+
+              val visitors = createStructureVisitors(classType._1, changedEntity, Some(fullClassName))
+              new Structure(node, fullClassName, descr, parent, visitors)
             }
 
             case None    =>
@@ -219,35 +237,52 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
 
                 // Determine artifact types
                 val classType = node.getType match {
-                  case CLASS_DECLARATION  => ArtifactType.ARTIFACT_CLASS
-                  case INTERFACE          => ArtifactType.ARTIFACT_INTERFACE
-                  case ENUM               => ArtifactType.ARTIFACT_ENUM
-                  case ANNOTATION_DECL    => ArtifactType.ARTIFACT_ANNOTATION
+                  case CLASS_DECLARATION  => (ArtifactType.ARTIFACT_CLASS, classOf[ClassDescriptor])
+                  case INTERFACE          => (ArtifactType.ARTIFACT_INTERFACE, classOf[InterfaceDescriptor])
+                  case ENUM               => (ArtifactType.ARTIFACT_ENUM, classOf[EnumDescriptor])
+                  case ANNOTATION_DECL    => (ArtifactType.ARTIFACT_ANNOTATION, classOf[AnnotationDescriptor])
                   case _ => throw new IllegalStateException("Unexpected main class type: " + node.getType)
                 }
 
-                val visitors = createStructureVisitors(classType, changedEntity, Some(fullClassName))
-                new Structure(
-                    node,
-                    fullClassName,
-                    classType,
-                    detectVisibility(node),
-                    parent,
-                    visitors)
+                val descr = context.getStore.create(classType._2)
+                descr.setDeclarationUnit(compilationUnit)
+                descr.setName(className)
+                descr.setFullQualifiedName(fullClassName)
+                descr.setStartLineNumber(node.getLine)
+                descr.setEndLineNumber(node.getLastLine)
+                descr.setVisibility(detectVisibility(node).name)
+                descr.setFinal(detectFinal(node))
+                descr.setStatic(detectStatic(node))
+                descr.setAbstract(detectAbstract(node))
+                compilationUnit.setMainType(descr)
+
+                val visitors = createStructureVisitors(classType._1, changedEntity, Some(fullClassName))
+                new Structure(node, fullClassName, descr, None, visitors)
 
               } else {
 
                 // Determine artifact types
                 val classType = node.getType match {
-                  case CLASS_DECLARATION  => ArtifactType.CLASS
-                  case INTERFACE          => ArtifactType.INTERFACE
-                  case ENUM               => ArtifactType.ENUM
-                  case ANNOTATION_DECL    => ArtifactType.ANNOTATION
+                  case CLASS_DECLARATION  => (ArtifactType.CLASS, classOf[ClassDescriptor])
+                  case INTERFACE          => (ArtifactType.INTERFACE, classOf[InterfaceDescriptor])
+                  case ENUM               => (ArtifactType.ENUM, classOf[EnumDescriptor])
+                  case ANNOTATION_DECL    => (ArtifactType.ANNOTATION, classOf[AnnotationDescriptor])
                   case _ => throw new IllegalStateException("Unexpected class type: " + node.getType)
                 }
 
-                val visitors = createStructureVisitors(classType, changedEntity, Some(fullClassName))
-                new Structure(node, fullClassName, classType, detectVisibility(node), parent, visitors)
+                val descr = context.getStore.create(classType._2)
+                descr.setDeclarationUnit(compilationUnit)
+                descr.setName(className)
+                descr.setFullQualifiedName(fullClassName)
+                descr.setStartLineNumber(node.getLine)
+                descr.setEndLineNumber(node.getLastLine)
+                descr.setVisibility(detectVisibility(node).name)
+                descr.setFinal(detectFinal(node))
+                descr.setStatic(detectStatic(node))
+                descr.setAbstract(detectAbstract(node))
+
+                val visitors = createStructureVisitors(classType._1, changedEntity, Some(fullClassName))
+                new Structure(node, fullClassName, descr, None, visitors)
               }
           }
 
@@ -268,15 +303,16 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
           }
 
           // Create new structure
+          val descr = context.getStore.create(classOf[EnumConstantDescriptor])
+          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+          descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
+          descr.setName(enumName)
+          descr.setSignature(enumName)
+          descr.setStartLineNumber(node.getLine)
+          descr.setEndLineNumber(node.getLastLine)
+
           val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, Some(enumName))
-          val structure =
-            new Structure(
-                enumDecl,
-                enumName,
-                ArtifactType.ENUM_CONST,
-                detectVisibility(node),
-                Some(parent),
-                visitors)
+          val structure = new Structure(enumDecl, enumName, descr, Some(parent), visitors)
           structures(enumDecl) = structure
           structureStack.push(structure)
         }
@@ -289,15 +325,20 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
           // Create new structure
           val constructorSig =
             addToSignature(node.getChildren.toIndexedSeq, parent.name)
+
+          val descr = context.getStore.create(classOf[ConstructorDescriptor])
+          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+          descr.setName(parent.descriptor.asInstanceOf[TypeDescriptor].getName)
+          descr.setSignature(constructorSig)
+          descr.setAbstract(detectAbstract(node))
+          descr.setFinal(detectFinal(node))
+          descr.setVisibility(detectVisibility(node).name)
+          descr.setStartLineNumber(node.getLine)
+          descr.setEndLineNumber(node.getLastLine)
+
+
           val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, Some(constructorSig))
-          val structure =
-            new Structure(
-                node,
-                constructorSig,
-                ArtifactType.CONSTRUCTOR,
-                detectVisibility(node),
-                Some(parent),
-                visitors)
+          val structure = new Structure(node, constructorSig, descr, Some(parent), visitors)
           structures(node) = structure
           structureStack.push(structure)
         }
@@ -308,16 +349,19 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
           val parent = structureStack.top
 
           // Create new structure
-          val anonClassName = parent.name + ".ANON[" + parent.anonClassCount + "]"
-          val visitors = createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, Some(anonClassName))
-          val structure =
-            new Structure(
-                node,
-                anonClassName,
-                ArtifactType.ANON_INNER_CLASS,
-                Visibility.ANONYMOUS,
-                Some(parent),
-                visitors)
+          val parentSimpleClassName = parent.descriptor.asInstanceOf[TypeDescriptor].getName
+
+          val descr = context.getStore.create(classOf[AnonymousClassDescriptor])
+          descr.setDeclarationUnit(compilationUnit)
+          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+          descr.setIndex(parent.anonClassCount)
+          descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
+          descr.setFullQualifiedName(s"${parent.name}.ANON[${descr.getIndex}]")
+          descr.setStartLineNumber(node.getLine)
+          descr.setEndLineNumber(node.getLastLine)
+
+          val visitors = createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, Some(descr.getFullQualifiedName))
+          val structure = new Structure(node, descr.getFullQualifiedName, descr, Some(parent), visitors)
           structures(node) = structure
           structureStack.push(structure)
         }
@@ -332,12 +376,56 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
           // Create new structure
           val methodName =
             addToSignature(node.getChildren.toIndexedSeq, parent.name + ".")
+
+          val descr = context.getStore.create(classOf[MethodDescriptor])
+          descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
+          descr.setSignature(methodName)
+          descr.setName(getFunctionIdentifier(node.getChildren.toIndexedSeq))
+          descr.setAbstract(detectAbstract(node))
+          descr.setFinal(detectFinal(node))
+          descr.setVisibility(detectVisibility(node).name)
+          descr.setStatic(detectStatic(node))
+          descr.setStartLineNumber(node.getLine)
+          descr.setEndLineNumber(node.getLastLine)
+
           val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, Some(methodName))
-          val structure =
-            new Structure(node, methodName, ArtifactType.METHOD, detectVisibility(node), Some(parent), visitors)
+          val structure = new Structure(node, methodName, descr, Some(parent), visitors)
           structures(node) = structure
           structureStack.push(structure)
         }
+
+        case VAR_DECLARATION => {
+          val parent = structureStack.top
+
+          // Only include fields and no variable declarations inside of methods!
+          if (parent.descriptor.isInstanceOf[TypeDescriptor]) {
+            val visibility = detectVisibility(node).name
+            val isFinal = detectFinal(node)
+            val isStatic = detectStatic(node)
+            val isTransient = detectTransient(node)
+            val isVolatile = detectVolatile(node)
+            val fieldType = detectType(node)
+            val fieldNameNodes = detectVariableDeclarators(node)
+
+            fieldNameNodes.foreach { n =>
+              val descr = context.getStore.create(classOf[FieldDescriptor])
+              descr.setDeclaringType(parent.descriptor.asInstanceOf[JavaSourceDescriptor])
+              descr.setName(n.getChild(0).getText)
+              descr.setVisibility(visibility)
+              descr.setFinal(isFinal)
+              descr.setStatic(isStatic)
+              descr.setTransient(isTransient)
+              descr.setVolatile(isVolatile)
+              descr.setStartLineNumber(node.getLine)
+
+              val typeDescr = context.getStore.create(classOf[IncompleteTypeDescriptor])
+              typeDescr.setName(fieldType.get.getText)
+              typeDescr.setFullQualifiedName(fieldType.get.getText)
+              descr.setType(typeDescr)
+            }
+          }
+        }
+
 
         case _ => // Silently ignore all other tokens
     }
@@ -399,12 +487,13 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
   }
 
 
-  /** Does return the module name for the analyzed artifact.
-    *
-    * The module name is a computed property. It is constructed from the changed entity path which is the
-    * module base name. The artifacts package name is converted back into a path structure and striped from
-    * the path. The returned module name contains only the source independent parts of the artifact path.
-    **/
+  /**
+   * Does return the module name for the analyzed artifact.
+   *
+   * The module name is a computed property. It is constructed from the changed entity path which is the
+   * module base name. The artifacts package name is converted back into a path structure and striped from
+   * the path. The returned module name contains only the source independent parts of the artifact path.
+   **/
   def getModule: Option[String] = {
     packageName match {
       case Some(name) => Some(determineModuleName(changedEntity, name))
@@ -417,40 +506,14 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
   def getPackage: Option[String] = packageName
 
 
-  /** Does return the unique name of the main artifact (usually a class or interface)
-    * or an empty string if none was found.
-    */
-  def getMainArtifact: Option[Artifact] = structures.values.collectFirst {
-    case s if (s.artifactType == ArtifactType.ARTIFACT_CLASS
-          || s.artifactType == ArtifactType.ARTIFACT_INTERFACE
-          || s.artifactType == ArtifactType.ARTIFACT_ENUM
-          || s.artifactType == ArtifactType.ARTIFACT_ANNOTATION) => {
-      Artifact(
-          s.name,
-          s.artifactType,
-          s.visibility,
-          s.node.getLine,
-          s.node.getLastLine,
-          packageName.getOrElse(""),
-          changedEntity.path + "$" + s.name)
-    }
-  }
-
-
-  /** Does return a map with all found artifacts and their measured values.
-    *
-    * Note: The values do depend on the additional visitors that were registered with this structural
-    * visitor.
-    */
+  /**
+   * Does return a map with all found artifacts and their measured values.
+   *
+   * Note: The values do depend on the additional visitors that were registered with this structural
+   * visitor.
+   */
   def getArtifacts: Map[Artifact, Set[Value]] = structures.values.map { s =>
-    val cea =
-      Artifact(s.name,
-        s.artifactType,
-        s.visibility,
-        s.node.getLine,
-        s.node.getLastLine,
-        packageName.getOrElse(""),
-        changedEntity.path + "$" + s.name)
+    val cea = Artifact(s.name.stripPrefix(packageName.getOrElse("") + "."), s.name, s.descriptor)
     (cea, s.visitors flatMap { _.measuredValues() })
   }.toMap
 
@@ -462,11 +525,7 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
       val packageStart = entity.path.lastIndexOf(packageWithEntity)
       entity.path.substring(0, packageStart)
     } else {
-      // FIXME This does not work for test classes with incorrect package path
-      /*throw new StructureException(
-        entity,
-        "Package '%s' is not encoded in path '%s'".format(pkgName, entity.path))*/
-      ""
+      throw new StructureException(entity, "Package '%s' is not encoded in path '%s'".format(pkgName, entity.path))
     }
   }
 
@@ -485,6 +544,16 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
     visitorFactories(artifactType).map { v =>
       v.createVisitor(changedEntity, artifactName)
     }.toSet
+  }
+
+  @tailrec
+  private def getFunctionIdentifier(nodes: IndexedSeq[EnhancedCommonTree]): String = {
+    if (nodes.isEmpty) return "()"
+
+    nodes.get(0).getType match {
+      case IDENT => return nodes.get(0).getText
+      case _ => getFunctionIdentifier(nodes.tail)
+    }
   }
 
   @tailrec
@@ -563,21 +632,22 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
   }
 
 
-  /** Run this method to detect the visibility of a structural node. A structural node might be a
-    * class, interface, enum or annotation or a method call.
-    *
-    * This method does look for a modifier list, if there is none the structure is package-protected
-    * - no keyword is defined at all. If there is a modifier list, it still might contain no children
-    * which results in package-protected visibility, too. Otherwise we look for the actual visibility
-    * modifier and return an appropriate visibility or if none of the standard visibility modifiers
-    * are found we end up with package-protected visibility, again.
-    */
+  /**
+   * Detect the visibility of a structural node. A structural node might be a
+   * class, interface, enum or annotation or a method call.
+   *
+   * This method does look for a modifier list, if there is none the structure is package-protected
+   * - no keyword is defined at all. If there is a modifier list, it still might contain no children
+   * which results in package-protected visibility, too. Otherwise we look for the actual visibility
+   * modifier and return an appropriate visibility or if none of the standard visibility modifiers
+   * are found we end up with package-protected visibility, again.
+   */
   private def detectVisibility(node: EnhancedCommonTree): Visibility = {
     node.getChildren find { _.getType == MODIFIER_LIST } match {
       case Some(list) => {
 
         // In case there are no modifiers at all
-        if (list.getChildren == null) return Visibility.PACKAGE
+        if (list.getChildren == null) return Visibility.DEFAULT
 
         // Otherwise pick a visibility modifier or return package visibility if there is none specified
         list.getChildren find {
@@ -590,13 +660,80 @@ class StructureVisitor(changedEntity: Change, compilationUnitDescriptor: JavaCom
             case PUBLIC    => Visibility.PUBLIC
             case PROTECTED => Visibility.PROTECTED
             case PRIVATE   => Visibility.PRIVATE
-            case _         => Visibility.PACKAGE
+            case _         => Visibility.DEFAULT
           }
-          case None    => Visibility.PACKAGE
+          case None    => Visibility.DEFAULT
         }
       }
-      case None       => Visibility.PACKAGE
+      case None       => Visibility.DEFAULT
     }
+  }
 
+
+  /**
+   * Detect the mutability of a structural node.
+   *
+   * @param node
+   * @return True if it is a final element.
+   */
+  private def detectFinal(node: EnhancedCommonTree): Boolean = detectModifier(node, FINAL)
+
+
+  /**
+   * Determine if the sturctural node is a static artifact.
+   *
+   * @param node
+   * @return True if it is a static element.
+   */
+  private def detectStatic(node: EnhancedCommonTree): Boolean = detectModifier(node, STATIC)
+
+
+  /**
+   * Determine if the structural artifact is abstract.
+   *
+   * @param node
+   * @return True if it is an abstract element.
+   */
+  private def detectAbstract(node: EnhancedCommonTree): Boolean = detectModifier(node, ABSTRACT)
+
+
+  private def detectVolatile(node: EnhancedCommonTree): Boolean = detectModifier(node, VOLATILE)
+
+
+  private def detectTransient(node: EnhancedCommonTree): Boolean = detectModifier(node, TRANSIENT)
+
+
+  private def detectModifier(node: EnhancedCommonTree, modifier: Int): Boolean = {
+    (for {
+      list <- node.getChildren.find(_.getType == MODIFIER_LIST)
+      modNode <- {
+        if (list.getChildren == null) None
+        else list.getChildren.find(_.getType == modifier).headOption
+      }
+    } yield modNode).isDefined
+  }
+
+
+  /**
+   * Determine the type of a field or parameter.
+   *
+   * @param node
+   * @return Type of field or node
+   */
+  private def detectType(node: EnhancedCommonTree): Option[EnhancedCommonTree] = {
+    for {
+      list <- node.getChildren.find(_.getType == TYPE)
+      typeNode <- list.getChildren.headOption
+    } yield typeNode
+  }
+
+
+  private def detectVariableDeclarators(node: EnhancedCommonTree): Iterable[EnhancedCommonTree] = {
+    node.getChildren.find(_.getType == VAR_DECLARATOR_LIST) match {
+      case Some(list) =>
+        if (list.getChildren == null) Seq.empty[EnhancedCommonTree]
+        else list.getChildren.filter(_.getType == VAR_DECLARATOR)
+      case None => Seq.empty[EnhancedCommonTree]
+    }
   }
 }

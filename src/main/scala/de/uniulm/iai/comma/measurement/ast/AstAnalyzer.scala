@@ -37,7 +37,7 @@ trait AstAnalyzer extends TreeWalker {
 
   def addVisitor(visitor: TreeVisitor) = visitorReg += visitor
 
-  def runWith(change: Change, src: Reader): Try[Change] = {
+  def runWith(change: Change, src: Reader): Unit = {
     val input = new ANTLRReaderStream(src)
 
     // Setup lexer to preserve all comments
@@ -74,13 +74,8 @@ trait AstAnalyzer extends TreeWalker {
       }
 
       walk(tree)
-      Success(change)
     } else {
-      val parserMessages = parser.getMessages
-      parserMessages foreach { msg =>
-        logger.debug(s"Parse Error for change ${change.name}: '${msg}'")
-      }
-      Failure(new ParsingException(change, parserMessages.toString))
+      parser.getMessages.foreach(println)
     }
   }
 

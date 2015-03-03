@@ -19,28 +19,30 @@ package de.uniulm.iai.comma.measurement.processor
 
 import java.io.Reader
 
+import com.buschmais.jqassistant.core.scanner.api.ScannerContext
 import de.uniulm.iai.comma.measurement.ast._
 import de.uniulm.iai.comma.model._
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaCompilationUnitDescriptor
 import org.apache.commons.logging.LogFactory
 
-class JavaMeasurement(artifactDescriptor: JavaCompilationUnitDescriptor, code: Reader, path: String)
-    extends AstAnalyzer {
+class JavaMeasurement(context: ScannerContext,
+                      compilationUnitDescriptor: JavaCompilationUnitDescriptor,
+                      code: Reader,
+                      path: String) extends AstAnalyzer {
 
   private val logger = LogFactory.getLog(getClass)
 
   // Create a dummy change
-  private val change = Change(artifactDescriptor.getFileName, path)
+  private val change = Change(compilationUnitDescriptor.getFileName, path)
 
   /*
    * Structural analysis visitor with structure child visitors
    * Hint: Add additional sub-visitors to acquire metrics based on the internal file structure.
    */
-  private val structureVisitor = new StructureVisitor(change)
+  private val structureVisitor = new StructureVisitor(change, compilationUnitDescriptor, context)
   addVisitor(structureVisitor)
+  addVisitor(new PrintVisitor)
 
+  def run() = runWith(change, code)
 
-  def run() = runWith(change, code) map { result =>
-
-  }
 }

@@ -3,8 +3,8 @@ package de.uniulm.iai.jqassistant.javasrc.plugin.model;
 import com.buschmais.jqassistant.core.store.api.model.FullQualifiedNameDescriptor;
 import com.buschmais.jqassistant.core.store.api.model.NamedDescriptor;
 import com.buschmais.xo.neo4j.api.annotation.Label;
-import com.buschmais.xo.neo4j.api.annotation.Property;
 import com.buschmais.xo.neo4j.api.annotation.Relation;
+import com.buschmais.xo.neo4j.api.annotation.Relation.Incoming;
 import com.buschmais.xo.neo4j.api.annotation.Relation.Outgoing;
 import de.uniulm.iai.jqassistant.javasrc.plugin.api.annotation.Declares;
 
@@ -15,24 +15,7 @@ import java.util.List;
  */
 @Label(value = "Type", usingIndexedPropertyOf = FullQualifiedNameDescriptor.class)
 public interface TypeDescriptor extends FullQualifiedNameDescriptor, NamedDescriptor, BlockLineSpanDescriptor,
-        JavaSourceDescriptor {
-
-    /**
-     * Is this the main type definition of the compilation unit?
-     *
-     * @return True if this is the main type definition.
-     */
-    @Property("mainType")
-    boolean isMainType();
-
-
-    /**
-     * Set if this is the main type definition.
-     *
-     * @param isMain
-     *      Set to true for main type definitions.
-     */
-    void setMainType(boolean isMain);
+        AccessModifierDescriptor, AbstractDescriptor, DeclaratorDescriptor, JavaSourceDescriptor {
 
     /**
      * Return the super class.
@@ -57,6 +40,15 @@ public interface TypeDescriptor extends FullQualifiedNameDescriptor, NamedDescri
      */
     @Relation("IMPLEMENTS")
     List<TypeDescriptor> getInterfaces();
+
+    /**
+     * Return the declared constructors.
+     *
+     * @return The declared constructors.
+     */
+    @Outgoing
+    @Declares
+    List<ConstructorDescriptor> getDeclaredConstructors();
 
     /**
      * Return the declared methods.
@@ -92,5 +84,12 @@ public interface TypeDescriptor extends FullQualifiedNameDescriptor, NamedDescri
      */
     @Relation("DECLARES")
     List<TypeDescriptor> getDeclaredInnerTypes();
+
+
+    @Incoming
+    @Declares
+    JavaCompilationUnitDescriptor getDeclarationUnit();
+
+    void setDeclarationUnit(JavaCompilationUnitDescriptor compilationUnit);
 
 }

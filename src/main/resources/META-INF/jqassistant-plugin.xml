@@ -1,14 +1,31 @@
 <jqa-plugin:jqassistant-plugin xmlns:jqa-plugin="http://www.buschmais.com/jqassistant/core/plugin/schema/v1.0">
-    <description>Plugin for my language.</description>
+    <description>Plugin for Java Source Files</description>
     <model>
-        <class>com.buschmais.jqassistant.demo.plugin.model.MyLanguageDescriptor</class>
-        <class>com.buschmais.jqassistant.demo.plugin.model.MyLanguageFileDescriptor</class>
-        <class>com.buschmais.jqassistant.demo.plugin.model.LineDescriptor</class>
-        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaSourceDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.AbstractDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.AccessModifierDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.AnnotationDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.AnonymousClassDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.BlockLineSpanDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.ClassDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.ConstructorDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.EnumDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.EnumConstantDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.FieldDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.FunctionDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.IncompleteTypeDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.InterfaceDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaCompilationUnitDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaSourceDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.LineNumberDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.MemberDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.MethodDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.ParameterDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.ReadsDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.TypedDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.TypeDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.WritesDescriptor</class>
     </model>
     <scanner>
-        <class>com.buschmais.jqassistant.demo.plugin.scanner.MyLanguageScannerPlugin</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.scanner.JavaSourceScannerPlugin</class>
     </scanner>
 </jqa-plugin:jqassistant-plugin>

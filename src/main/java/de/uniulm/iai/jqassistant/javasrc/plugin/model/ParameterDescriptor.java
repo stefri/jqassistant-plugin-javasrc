@@ -5,6 +5,6 @@ import com.buschmais.xo.neo4j.api.annotation.Label;
 /**
  * @author Steffen Kram
  */
-@Label(value = "Method")
-public interface MethodDescriptor extends FunctionDescriptor {
+@Label(value = "Parameter")
+public interface ParameterDescriptor extends JavaSourceDescriptor, TypedDescriptor {
 }

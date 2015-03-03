@@ -78,31 +78,15 @@ public class EmbeddedTest {
      * Stops the store instance.
      */
     @After
-    public void stopStore() {
+    public void stopStore() throws IOException {
+        Server server = new DefaultServerImpl(store, scannerPluginRepository, rulePluginRepository);
+        server.start();
+        System.out.println("Hit Enter to continue.");
+        System.in.read();
+        server.stop();
+
         // Stop the store
         store.stop();
-    }
-
-    /**
-     * Scans a file.
-     * 
-     * @throws PluginRepositoryException
-     *             If there's a problem with the plugin configuration.
-     */
-    @Test
-    @Ignore
-    public void scan() throws PluginRepositoryException {
-        // Reset the store
-        store.reset();
-
-        // Create the scanner instance
-        Scanner scanner = new ScannerImpl(store, scannerPluginRepository.getScannerPlugins());
-
-        // Scan the file within an transaction
-        store.beginTransaction();
-        File file = new File("src/test/data/source-file.myLanguage");
-        scanner.scan(file, file.getAbsolutePath(), null);
-        store.commitTransaction();
     }
 
     /**
