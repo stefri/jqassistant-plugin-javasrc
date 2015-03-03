@@ -17,6 +17,7 @@
  */
 package de.uniulm.iai.comma.measurement.ast
 
+import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
 import de.uniulm.iai.comma.model.{Measure, Value, Change}
@@ -56,7 +57,7 @@ object FanOutComplexityVisitor extends TreeVisitorFactory {
     new FanOutComplexityVisitor(entity, artifact, ignoredClassesBuilder.result())
   }
 
-  def createVisitor(entity: Change, artifact: Option[String]): FanOutComplexityVisitor = {
+  def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): FanOutComplexityVisitor = {
     apply(entity, artifact)
   }
 }

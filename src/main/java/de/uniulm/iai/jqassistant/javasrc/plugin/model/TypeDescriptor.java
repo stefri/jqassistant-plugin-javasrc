@@ -7,6 +7,7 @@ import com.buschmais.xo.neo4j.api.annotation.Relation;
 import com.buschmais.xo.neo4j.api.annotation.Relation.Incoming;
 import com.buschmais.xo.neo4j.api.annotation.Relation.Outgoing;
 import de.uniulm.iai.jqassistant.javasrc.plugin.api.annotation.Declares;
+import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NcscssDescriptor;
 
 import java.util.List;
 

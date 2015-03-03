@@ -227,7 +227,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
               descr.setStatic(detectStatic(node))
               descr.setAbstract(detectAbstract(node))
 
-              val visitors = createStructureVisitors(classType._1, changedEntity, Some(fullClassName))
+              val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
               new Structure(node, fullClassName, descr, parent, visitors)
             }
 
@@ -256,7 +256,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
                 descr.setAbstract(detectAbstract(node))
                 compilationUnit.setMainType(descr)
 
-                val visitors = createStructureVisitors(classType._1, changedEntity, Some(fullClassName))
+                val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
                 new Structure(node, fullClassName, descr, None, visitors)
 
               } else {
@@ -281,7 +281,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
                 descr.setStatic(detectStatic(node))
                 descr.setAbstract(detectAbstract(node))
 
-                val visitors = createStructureVisitors(classType._1, changedEntity, Some(fullClassName))
+                val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
                 new Structure(node, fullClassName, descr, None, visitors)
               }
           }
@@ -311,7 +311,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
           descr.setStartLineNumber(node.getLine)
           descr.setEndLineNumber(node.getLastLine)
 
-          val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, Some(enumName))
+          val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, descr, Some(enumName))
           val structure = new Structure(enumDecl, enumName, descr, Some(parent), visitors)
           structures(enumDecl) = structure
           structureStack.push(structure)
@@ -337,7 +337,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
           descr.setEndLineNumber(node.getLastLine)
 
 
-          val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, Some(constructorSig))
+          val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, descr, Some(constructorSig))
           val structure = new Structure(node, constructorSig, descr, Some(parent), visitors)
           structures(node) = structure
           structureStack.push(structure)
@@ -360,7 +360,8 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
           descr.setStartLineNumber(node.getLine)
           descr.setEndLineNumber(node.getLastLine)
 
-          val visitors = createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, Some(descr.getFullQualifiedName))
+          val visitors =
+            createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, descr, Some(descr.getFullQualifiedName))
           val structure = new Structure(node, descr.getFullQualifiedName, descr, Some(parent), visitors)
           structures(node) = structure
           structureStack.push(structure)
@@ -388,7 +389,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
           descr.setStartLineNumber(node.getLine)
           descr.setEndLineNumber(node.getLastLine)
 
-          val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, Some(methodName))
+          val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, descr, Some(methodName))
           val structure = new Structure(node, methodName, descr, Some(parent), visitors)
           structures(node) = structure
           structureStack.push(structure)
@@ -531,10 +532,10 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
 
   /** This method provides a save way to get a set with newly created visitors for a detected structure */
-  private def createStructureVisitors(
-      artifactType: ArtifactType,
-      entity: Change,
-      artifactName: Option[String]): Set[TreeVisitor] = {
+  private def createStructureVisitors(artifactType: ArtifactType,
+                                      entity: Change,
+                                      descriptor: Descriptor,
+                                      artifactName: Option[String]): Set[TreeVisitor] = {
 
     // Check if artifact type is already present in visitor factories list - if not create it!
     if (!visitorFactories.contains(artifactType)) {
@@ -542,7 +543,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
     }
 
     visitorFactories(artifactType).map { v =>
-      v.createVisitor(changedEntity, artifactName)
+      v.createVisitor(entity, descriptor, artifactName)
     }.toSet
   }
 

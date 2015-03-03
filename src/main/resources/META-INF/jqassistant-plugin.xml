@@ -24,6 +24,11 @@
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.TypedDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.TypeDescriptor</class>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.WritesDescriptor</class>
+
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.CyclomaticComplexityDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.MeasureDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NcscssDescriptor</class>
+        <class>de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NPathComplexityDescriptor</class>
     </model>
     <scanner>
         <class>de.uniulm.iai.jqassistant.javasrc.plugin.scanner.JavaSourceScannerPlugin</class>

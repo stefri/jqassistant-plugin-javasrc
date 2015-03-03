@@ -3,6 +3,8 @@ package de.uniulm.iai.jqassistant.javasrc.plugin.model;
 import com.buschmais.jqassistant.core.store.api.model.NamedDescriptor;
 import com.buschmais.xo.neo4j.api.annotation.Label;
 import com.buschmais.xo.neo4j.api.annotation.Relation;
+import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.CyclomaticComplexityDescriptor;
+import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NPathComplexityDescriptor;
 
 import java.util.List;
 
@@ -13,7 +15,7 @@ import java.util.List;
  */
 @Label(value = "Function")
 public interface FunctionDescriptor extends MemberDescriptor, NamedDescriptor, AccessModifierDescriptor,
-        AbstractDescriptor, BlockLineSpanDescriptor {
+        AbstractDescriptor, BlockLineSpanDescriptor, CyclomaticComplexityDescriptor, NPathComplexityDescriptor {
 
     @Relation("HAS")
     List<ParameterDescriptor> getParameters();

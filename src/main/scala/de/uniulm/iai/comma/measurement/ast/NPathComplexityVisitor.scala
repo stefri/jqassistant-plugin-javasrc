@@ -18,10 +18,12 @@
 
 package de.uniulm.iai.comma.measurement.ast
 
+import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.TreeWrapper._
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
 import de.uniulm.iai.comma.model.{Value, Change, Measure}
+import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NPathComplexityDescriptor
 
 import scala.collection.JavaConversions._
 
@@ -29,12 +31,14 @@ object NPathComplexityVisitor extends TreeVisitorFactory {
 
   def measures(): Iterable[Measure] = Vector(Measure.NPATH)
 
-  def createVisitor(entity: Change, artifact: Option[String]): NPathComplexityVisitor = {
-    new NPathComplexityVisitor(entity, artifact)
+  def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): NPathComplexityVisitor = {
+    new NPathComplexityVisitor(entity, descriptor.asInstanceOf[NPathComplexityDescriptor], artifact)
   }
 }
 
-class NPathComplexityVisitor(entity: Change, artifact: Option[String] = None) extends TreeVisitor {
+class NPathComplexityVisitor(entity: Change, descriptor: NPathComplexityDescriptor, artifact: Option[String] = None)
+      extends TreeVisitor {
+
   val maxThreshold = 16000
   private var npath: BigInt = 0
 
@@ -57,10 +61,12 @@ class NPathComplexityVisitor(entity: Change, artifact: Option[String] = None) ex
   /** Returns the overall npath value for the visited construct (depends where the visitor is attached). */
   override def measuredValues(): Iterable[Value] = {
     if (npath > maxThreshold) {
+      descriptor.setNPathComplexity(-1l)
       Vector(
         Value(artifact, Measure.NPATH_MAX_EXCEEDED, 1)
       )
     } else {
+      descriptor.setNPathComplexity(npath.toLong)
       Vector(
         Value(artifact, Measure.NPATH, npath.toLong)
       )

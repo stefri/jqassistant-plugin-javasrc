@@ -79,12 +79,6 @@ public class EmbeddedTest {
      */
     @After
     public void stopStore() throws IOException {
-        Server server = new DefaultServerImpl(store, scannerPluginRepository, rulePluginRepository);
-        server.start();
-        System.out.println("Hit Enter to continue.");
-        System.in.read();
-        server.stop();
-
         // Stop the store
         store.stop();
     }
@@ -95,32 +89,35 @@ public class EmbeddedTest {
      * @throws PluginRepositoryException
      *              If there's a problem with the plugin configuration
      */
-    @Test
-    public void scanJava() throws PluginRepositoryException {
+    public void scan() throws PluginRepositoryException {
         store.reset();
 
         Scanner scanner = new ScannerImpl(store, scannerPluginRepository.getScannerPlugins());
 
         store.beginTransaction();
-        File file = new File("src/test/data/foo/bar/baz/FooClass.java");
+        File file = new File("src/test/data/example/one/Test3.java");
         scanner.scan(file, file.getAbsolutePath(), null);
         store.commitTransaction();
     }
 
     /**
-     * Starts the embedded Neo4j server, it will be available unter
+     * Starts the embedded Neo4j server, it will be available under
      * http://localhost:7474.
-     * 
+     *
      * @throws IOException
      *             If the console repeats an error.
      */
-    @Test
-    @Ignore
     public void server() throws IOException {
         Server server = new DefaultServerImpl(store, scannerPluginRepository, rulePluginRepository);
         server.start();
         System.out.println("Hit Enter to continue.");
         System.in.read();
         server.stop();
+    }
+
+    @Test
+    public void scanAndServe() throws PluginRepositoryException, IOException {
+        scan();
+        server();
     }
 }

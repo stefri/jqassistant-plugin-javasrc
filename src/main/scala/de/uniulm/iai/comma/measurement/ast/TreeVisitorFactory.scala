@@ -17,6 +17,7 @@
  */
 package de.uniulm.iai.comma.measurement.ast
 
+import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.model.{Change, Measure}
 
 
@@ -24,8 +25,8 @@ trait TreeVisitorFactory {
 
   def measures(): Iterable[Measure]
 
-  def createVisitor(entity: Change): TreeVisitor = createVisitor(entity, None)
+  def createVisitor(entity: Change, descriptor: Descriptor): TreeVisitor = createVisitor(entity, descriptor, None)
 
-  def createVisitor(entity: Change, artifact: Option[String]): TreeVisitor
+  def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): TreeVisitor
 
 }

@@ -41,8 +41,56 @@ class JavaMeasurement(context: ScannerContext,
    */
   private val structureVisitor = new StructureVisitor(change, compilationUnitDescriptor, context)
   addVisitor(structureVisitor)
-  addVisitor(new PrintVisitor)
 
-  def run() = runWith(change, code)
+  // Artifact Class visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_CLASS, NcscssVisitor)
+
+  // Artifact Interface visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_INTERFACE, NcscssVisitor)
+
+  // Artifact Enum visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_ENUM, NcscssVisitor)
+
+  // Artifact Annotation visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_ANNOTATION, NcscssVisitor)
+
+  // Class visitors
+  structureVisitor.addVisitorFactory(ArtifactType.CLASS, NcscssVisitor)
+
+  // Inner Class visitors
+  structureVisitor.addVisitorFactory(ArtifactType.INNER_CLASS, NcscssVisitor)
+
+  // Anonymous Inner Class visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ANON_INNER_CLASS, NcscssVisitor)
+
+  // Interface visitors
+  structureVisitor.addVisitorFactory(ArtifactType.INTERFACE, NcscssVisitor)
+
+  // Enumeration visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ENUM, NcscssVisitor)
+
+  // Inner enumeration visitors
+  structureVisitor.addVisitorFactory(ArtifactType.INNER_ENUM, NcscssVisitor)
+
+  // Annotation visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ANNOTATION, NcscssVisitor)
+
+  // Constructor visitors
+  structureVisitor.addVisitorFactory(ArtifactType.CONSTRUCTOR, NcscssVisitor)
+  structureVisitor.addVisitorFactory(ArtifactType.CONSTRUCTOR, CyclomaticComplexityVisitor)
+  structureVisitor.addVisitorFactory(ArtifactType.CONSTRUCTOR, NPathComplexityVisitor)
+
+  // Method visitors
+  structureVisitor.addVisitorFactory(ArtifactType.METHOD, NcscssVisitor)
+  structureVisitor.addVisitorFactory(ArtifactType.METHOD, CyclomaticComplexityVisitor)
+  structureVisitor.addVisitorFactory(ArtifactType.METHOD, NPathComplexityVisitor)
+
+  // EnumConstant visitors
+  structureVisitor.addVisitorFactory(ArtifactType.ENUM_CONST, NcscssVisitor)
+
+  def run() = {
+    runWith(change, code)
+    structureVisitor.getArtifacts
+  }
 
 }

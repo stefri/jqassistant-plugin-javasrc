@@ -18,13 +18,14 @@
 
 package de.uniulm.iai.comma.measurement.ast
 
+import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.model.{Value, Change, Measure}
 
 object SlocVisitor extends TreeVisitorFactory {
   def measures(): Iterable[Measure] = Vector(Measure.LOC)
 
-  def createVisitor(entity: Change, artifact: Option[String]): SlocVisitor = {
+  def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): SlocVisitor = {
     new SlocVisitor(entity, artifact)
   }
 }
