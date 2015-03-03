@@ -44,8 +44,7 @@
  * 2011-03-14   Recognize generic type arguments correctly for all kinds of
  *              super contructor calls.
  *
- * 2011-2013    Changes by Steffen Kram to match the specific analyzer
- *              requirements.
+ * 2011-2015    Changes by Steffen Kram to match the specific comma requirements.
  *
  * ----------------------------------------------------------------------------
  * Licence agreement
