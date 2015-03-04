@@ -78,6 +78,5 @@ object Visibility extends Enum[Visibility] {
 
 case class Artifact(
     artifact: String,
-    artifactFqn: String,
-    descriptor: Descriptor)
+    artifactFqn: String)
 

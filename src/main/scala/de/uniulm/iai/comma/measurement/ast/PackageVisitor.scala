@@ -4,6 +4,7 @@ import com.buschmais.jqassistant.core.scanner.api.ScannerContext
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaSourceDescriptor
+import de.uniulm.iai.jqassistant.javasrc.plugin.scanner.ScannerHelper
 
 import scala.collection.JavaConversions._
 
@@ -11,7 +12,7 @@ import scala.collection.JavaConversions._
  * @author Steffen Kram
  */
 
-class PackageVisitor(context: ScannerContext, descriptor: JavaSourceDescriptor)
+class PackageVisitor(helper: ScannerHelper, descriptor: JavaSourceDescriptor)
     extends TreeVisitor with VisitorHelper {
 
   /** Store the package identifier of this file if one is present */

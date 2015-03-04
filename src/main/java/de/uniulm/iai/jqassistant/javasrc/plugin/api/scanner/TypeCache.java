@@ -4,9 +4,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.cache.*;
+import de.uniulm.iai.jqassistant.javasrc.plugin.model.ConstructorDescriptor;
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.FieldDescriptor;
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.FunctionDescriptor;
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.MemberDescriptor;
+import de.uniulm.iai.jqassistant.javasrc.plugin.model.MethodDescriptor;
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.TypeDescriptor;
 
 /**
@@ -96,8 +98,12 @@ public class TypeCache {
             return (FieldDescriptor) members.get(signature);
         }
 
-        public FunctionDescriptor getFunction(String signature) {
-            return (FunctionDescriptor) members.get(signature);
+        public MethodDescriptor getMethod(String signature) {
+            return (MethodDescriptor) members.get(signature);
+        }
+
+        public ConstructorDescriptor getConstructor(String signature) {
+            return (ConstructorDescriptor) members.get(signature);
         }
 
         public void addMember(String signature, MemberDescriptor member) {

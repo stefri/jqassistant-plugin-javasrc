@@ -9,24 +9,24 @@ import de.uniulm.iai.comma.measurement.processor.JavaMeasurement
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaCompilationUnitDescriptor
 import org.apache.commons.logging.LogFactory
 
+/**
+ * Implementation of the {@link AbstractScannerPlugin} for java source code.
+ *
+ * @author Steffen Kram
+ */
 class JavaSourceScannerPlugin extends AbstractScannerPlugin[FileResource, JavaCompilationUnitDescriptor] {
-  private val logger = LogFactory.getLog(getClass)
 
   override def accepts(item: FileResource, path: String, scope: Scope): Boolean = path.endsWith(".java")
 
   override def scan(item: FileResource, path: String, scope: Scope, scanner: Scanner): JavaCompilationUnitDescriptor = {
     val store = scanner.getContext.getStore
 
-    // Create a node representing the file itself
-    val compilationUnitDescriptor = store.create(classOf[JavaCompilationUnitDescriptor])
-    compilationUnitDescriptor.setFileName(item.getFile.getName)
-    compilationUnitDescriptor.setMayCompile(true)
+    // Create the scanner helper
+    val helper = ScannerHelper(scanner.getContext)
 
     // Setup and run java measurement processor
     val reader = new InputStreamReader(item.createStream())
-    val proc = new JavaMeasurement(scanner.getContext, compilationUnitDescriptor, reader, path)
-    proc.run()
 
-    compilationUnitDescriptor
+    JavaMeasurement(helper, item, path).run()
   }
 }

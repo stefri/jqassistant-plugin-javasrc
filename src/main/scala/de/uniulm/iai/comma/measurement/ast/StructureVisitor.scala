@@ -17,12 +17,13 @@
  */
 package de.uniulm.iai.comma.measurement.ast
 
-import com.buschmais.jqassistant.core.scanner.api.ScannerContext
 import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
 import de.uniulm.iai.comma.lib.ast.javasource.{EnhancedCommonTree, JavaLexer}
 import de.uniulm.iai.comma.model._
+import de.uniulm.iai.jqassistant.javasrc.plugin.api.scanner.TypeCache
 import de.uniulm.iai.jqassistant.javasrc.plugin.model._
+import de.uniulm.iai.jqassistant.javasrc.plugin.scanner.ScannerHelper
 import org.antlr.runtime.tree.Tree
 
 import scala.collection.JavaConversions._
@@ -33,13 +34,12 @@ import scala.collection.JavaConversions._
  * to numerous sub-visitors. A sub-visitor does implement the same `TreeVisitor` trait. It should compute
  * a measure that holds if applied in a sub-structural context.
  */
-class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUnitDescriptor, context: ScannerContext)
-  extends TreeVisitor with VisitorHelper {
+class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUnitDescriptor, helper: ScannerHelper)
+    extends TreeVisitor with VisitorHelper {
 
   /** Internal storage for all registered artifact type visitor factories */
   private val visitorFactories =
     collection.mutable.Map.empty[ArtifactType, collection.mutable.Set[TreeVisitorFactory]]
-
 
   /**
    * Add a visitor factory for a certain artifact type.
@@ -60,10 +60,9 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
   }
 
   /** This is an internal class to store information about the source structure while parsing the source file. */
-  private class Structure(
-                           val node: EnhancedCommonTree,
+  private class Structure(val node: EnhancedCommonTree,
                            val name: String,
-                           val descriptor: Descriptor,
+                           val cachedType: Option[TypeCache.CachedType[_ <: TypeDescriptor]],
                            val parent: Option[Structure],
                            val visitors: Set[TreeVisitor]) {
 
@@ -208,11 +207,11 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
             val visibility = detectVisibility(node)
 
-            val descr = context.getStore.create(classType._2)
+            // Create new descriptor
+            val cachedType = helper.createType(fullClassName, classType._2)
+            val descr = cachedType.getTypeDescriptor
             descr.setDeclarationUnit(compilationUnit)
-            descr.setDeclaringType(p.descriptor.asInstanceOf[TypeDescriptor])
             descr.setName(className)
-            descr.setFullQualifiedName(fullClassName)
             descr.setStartLineNumber(node.getLine)
             descr.setEndLineNumber(node.getLastLine)
             descr.setVisibility(visibility.name)
@@ -220,8 +219,11 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
             descr.setStatic(detectStatic(node))
             descr.setAbstract(detectAbstract(node))
 
+            // Add descriptor as inner type definition
+            p.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+
             val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
-            new Structure(node, fullClassName, descr, parent, visitors)
+            new Structure(node, fullClassName, Some(cachedType), parent, visitors)
           }
 
           case None    =>
@@ -237,10 +239,10 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
                 case _ => throw new IllegalStateException("Unexpected main class type: " + node.getType)
               }
 
-              val descr = context.getStore.create(classType._2)
+              val cachedType = helper.createType(fullClassName, classType._2)
+              val descr = cachedType.getTypeDescriptor
               descr.setDeclarationUnit(compilationUnit)
               descr.setName(className)
-              descr.setFullQualifiedName(fullClassName)
               descr.setStartLineNumber(node.getLine)
               descr.setEndLineNumber(node.getLastLine)
               descr.setVisibility(detectVisibility(node).name)
@@ -250,7 +252,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
               compilationUnit.setMainType(descr)
 
               val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
-              new Structure(node, fullClassName, descr, None, visitors)
+              new Structure(node, fullClassName, Some(cachedType), None, visitors)
 
             } else {
 
@@ -263,10 +265,10 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
                 case _ => throw new IllegalStateException("Unexpected class type: " + node.getType)
               }
 
-              val descr = context.getStore.create(classType._2)
+              val cachedType = helper.createType(fullClassName, classType._2)
+              val descr = cachedType.getTypeDescriptor
               descr.setDeclarationUnit(compilationUnit)
               descr.setName(className)
-              descr.setFullQualifiedName(fullClassName)
               descr.setStartLineNumber(node.getLine)
               descr.setEndLineNumber(node.getLastLine)
               descr.setVisibility(detectVisibility(node).name)
@@ -275,7 +277,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
               descr.setAbstract(detectAbstract(node))
 
               val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
-              new Structure(node, fullClassName, descr, None, visitors)
+              new Structure(node, fullClassName, Some(cachedType), None, visitors)
             }
         }
 
@@ -283,7 +285,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         structureStack.push(structure)
       }
 
-      case ENUM_CLASS_BODY => {
+      /* FIXME case ENUM_CLASS_BODY => {
         val enumDecl = node.getParent
 
         // Lookup parent
@@ -297,19 +299,23 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         }
 
         // Create new structure
-        val descr = context.getStore.create(classOf[EnumConstantDescriptor])
-        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-        descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
+        val cachedType = helper.createType(enumName, classOf[EnumConstantDescriptor])
+        val descr = cachedType.getTypeDescriptor
+        //descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
         descr.setName(enumName)
         descr.setSignature(enumName)
         descr.setStartLineNumber(node.getLine)
         descr.setEndLineNumber(node.getLastLine)
 
+        // Add descriptor as inner type definition
+        // FIXME Should we add an enum constant as field?
+        // parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+
         val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, descr, Some(enumName))
-        val structure = new Structure(enumDecl, enumName, descr, Some(parent), visitors)
+        val structure = new Structure(enumDecl, enumName, None, Some(parent), visitors)
         structures(enumDecl) = structure
         structureStack.push(structure)
-      }
+      }*/
 
       case CONSTRUCTOR_DECL => {
 
@@ -320,9 +326,8 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         val constructorSig =
           addToSignature(node.getChildren.toIndexedSeq, parent.name)
 
-        val descr = context.getStore.create(classOf[ConstructorDescriptor])
-        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-        descr.setName(parent.descriptor.asInstanceOf[TypeDescriptor].getName)
+        val descr = helper.constructorDescriptor(parent.cachedType.get, constructorSig)
+        descr.setName(parent.cachedType.get.getTypeDescriptor.getName)
         descr.setSignature(constructorSig)
         descr.setAbstract(detectAbstract(node))
         descr.setFinal(detectFinal(node))
@@ -332,7 +337,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
 
         val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, descr, Some(constructorSig))
-        val structure = new Structure(node, constructorSig, descr, Some(parent), visitors)
+        val structure = new Structure(node, constructorSig, None, Some(parent), visitors)
         structures(node) = structure
         structureStack.push(structure)
       }
@@ -343,20 +348,23 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         val parent = structureStack.top
 
         // Create new structure
-        val parentSimpleClassName = parent.descriptor.asInstanceOf[TypeDescriptor].getName
+        val parentSimpleClassName = parent.cachedType.get.getTypeDescriptor.getName
+        val index = parent.anonClassCount
 
-        val descr = context.getStore.create(classOf[AnonymousClassDescriptor])
+        val cachedType = helper.createType(s"${parent.name}.ANON[$index]", classOf[AnonymousClassDescriptor])
+        val descr = cachedType.getTypeDescriptor
         descr.setDeclarationUnit(compilationUnit)
-        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-        descr.setIndex(parent.anonClassCount)
+        descr.setIndex(index)
         descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
-        descr.setFullQualifiedName(s"${parent.name}.ANON[${descr.getIndex}]")
         descr.setStartLineNumber(node.getLine)
         descr.setEndLineNumber(node.getLastLine)
 
+        // Add descriptor as inner type definition
+        parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+
         val visitors =
           createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, descr, Some(descr.getFullQualifiedName))
-        val structure = new Structure(node, descr.getFullQualifiedName, descr, Some(parent), visitors)
+        val structure = new Structure(node, descr.getFullQualifiedName, Some(cachedType), Some(parent), visitors)
         structures(node) = structure
         structureStack.push(structure)
       }
@@ -372,9 +380,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         val methodName =
           addToSignature(node.getChildren.toIndexedSeq, parent.name + ".")
 
-        val descr = context.getStore.create(classOf[MethodDescriptor])
-        descr.setDeclaringType(parent.descriptor.asInstanceOf[TypeDescriptor])
-        descr.setSignature(methodName)
+        val descr = helper.methodDescriptor(parent.cachedType.get, methodName)
         descr.setName(getFunctionIdentifier(node.getChildren.toIndexedSeq))
         descr.setAbstract(detectAbstract(node))
         descr.setFinal(detectFinal(node))
@@ -384,7 +390,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         descr.setEndLineNumber(node.getLastLine)
 
         val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, descr, Some(methodName))
-        val structure = new Structure(node, methodName, descr, Some(parent), visitors)
+        val structure = new Structure(node, methodName, None, Some(parent), visitors)
         structures(node) = structure
         structureStack.push(structure)
       }
@@ -393,7 +399,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         val parent = structureStack.top
 
         // Only include fields and no variable declarations inside of methods!
-        if (parent.descriptor.isInstanceOf[TypeDescriptor]) {
+        if (parent.cachedType.isDefined) {
           val visibility = detectVisibility(node).name
           val isFinal = detectFinal(node)
           val isStatic = detectStatic(node)
@@ -403,9 +409,9 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
           val fieldNameNodes = detectVariableDeclarators(node)
 
           fieldNameNodes.foreach { n =>
-            val descr = context.getStore.create(classOf[FieldDescriptor])
-            descr.setDeclaringType(parent.descriptor.asInstanceOf[JavaSourceDescriptor])
-            descr.setName(n.getChild(0).getText)
+            val signature = n.getChild(0).getText
+            val descr = helper.fieldDescriptor(parent.cachedType.get, signature)
+            descr.setName(signature)
             descr.setVisibility(visibility)
             descr.setFinal(isFinal)
             descr.setStatic(isStatic)
@@ -413,14 +419,11 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
             descr.setVolatile(isVolatile)
             descr.setStartLineNumber(node.getLine)
 
-            val typeDescr = context.getStore.create(classOf[IncompleteTypeDescriptor])
-            typeDescr.setName(fieldType.get.getText)
-            typeDescr.setFullQualifiedName(fieldType.get.getText)
+            val typeDescr = helper.resolveType(fieldType.get.getText, parent.cachedType.get).getTypeDescriptor
             descr.setType(typeDescr)
           }
         }
       }
-
 
       case _ => // Silently ignore all other tokens
     }
@@ -429,20 +432,20 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
     if (structureStack.isEmpty) {
       (node.getPrecedingComments ++ node.getFollowingComments).foreach { t =>
         t.getType match {
-          case JavaLexer.LINE_COMMENT => {
+          case JavaLexer.LINE_COMMENT =>
             _lineCommentCount += 1
             _lineCommentLength += t.getText.length
-          }
-          case JavaLexer.BLOCK_COMMENT => {
+
+          case JavaLexer.BLOCK_COMMENT =>
             _blockCommentCount += 1
             _blockCommentLines += t.getText.linesIterator.size
             _blockCommentLength += t.getText.length
-          }
-          case JavaLexer.JAVADOC_COMMENT => {
+
+          case JavaLexer.JAVADOC_COMMENT =>
             _javadocCommentCount += 1
             _javadocCommentLines += t.getText.linesIterator.size
             _javadocCommentLength += t.getText.length
-          }
+
           case _ => // ignore, ... should be never reached anyway.
         }
       }
@@ -508,7 +511,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
    * visitor.
    */
   def getArtifacts: Map[Artifact, Set[Value]] = structures.values.map { s =>
-    val cea = Artifact(s.name.stripPrefix(packageName.getOrElse("") + "."), s.name, s.descriptor)
+    val cea = Artifact(s.name.stripPrefix(packageName.getOrElse("") + "."), s.name)
     (cea, s.visitors flatMap { _.measuredValues() })
   }.toMap
 

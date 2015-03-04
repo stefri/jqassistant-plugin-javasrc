@@ -17,29 +17,38 @@
  */
 package de.uniulm.iai.comma.measurement.processor
 
-import java.io.Reader
+import java.io.{InputStreamReader, File, Reader}
 
 import com.buschmais.jqassistant.core.scanner.api.ScannerContext
+import com.buschmais.jqassistant.plugin.common.api.scanner.filesystem.FileResource
 import de.uniulm.iai.comma.measurement.ast._
 import de.uniulm.iai.comma.model._
+import de.uniulm.iai.jqassistant.javasrc.plugin.api.scanner.TypeCache
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaCompilationUnitDescriptor
+import de.uniulm.iai.jqassistant.javasrc.plugin.scanner.ScannerHelper
 import org.apache.commons.logging.LogFactory
 
-class JavaMeasurement(context: ScannerContext,
-                      compilationUnitDescriptor: JavaCompilationUnitDescriptor,
-                      code: Reader,
-                      path: String) extends AstAnalyzer {
+object JavaMeasurement {
+  def apply(helper: ScannerHelper, item: FileResource, path: String) = {
+    new JavaMeasurement(helper, item, path)
+  }
+}
 
-  private val logger = LogFactory.getLog(getClass)
+class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) extends AstAnalyzer {
 
   // Create a dummy change
-  private val change = Change(compilationUnitDescriptor.getFileName, path)
+  private val change = Change(item.getFile.getName, path)
+
+
+  // Create the java compilation unit descriptor
+  val compilationUnitDescriptor = helper.compilationUnit(path, item.getFile.getName)
+
 
   /*
    * Structural analysis visitor with structure child visitors
    * Hint: Add additional sub-visitors to acquire metrics based on the internal file structure.
    */
-  private val structureVisitor = new StructureVisitor(change, compilationUnitDescriptor, context)
+  private val structureVisitor = new StructureVisitor(change, compilationUnitDescriptor, helper)
   addVisitor(structureVisitor)
 
   // Artifact Class visitors
@@ -92,18 +101,20 @@ class JavaMeasurement(context: ScannerContext,
   /*
    * Package visitor
    */
-  val packageVisitor = new PackageVisitor(context, compilationUnitDescriptor)
+  val packageVisitor = new PackageVisitor(helper, compilationUnitDescriptor)
   addVisitor(packageVisitor)
 
   /*
    * Import visitor
    */
-  val importVisitor = new ImportVisitor(context, compilationUnitDescriptor)
+  val importVisitor = new ImportVisitor(helper, compilationUnitDescriptor)
   addVisitor(importVisitor)
 
-  def run() = {
-    runWith(change, code)
+  def run() = try {
+    val reader = new InputStreamReader(item.createStream())
+    runWith(change, reader)
     structureVisitor.getArtifacts
+    compilationUnitDescriptor
   }
 
 }

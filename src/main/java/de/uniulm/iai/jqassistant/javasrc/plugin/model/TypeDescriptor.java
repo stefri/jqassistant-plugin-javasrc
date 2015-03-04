@@ -16,7 +16,7 @@ import java.util.List;
  */
 @Label(value = "Type", usingIndexedPropertyOf = FullQualifiedNameDescriptor.class)
 public interface TypeDescriptor extends FullQualifiedNameDescriptor, NamedDescriptor, BlockLineSpanDescriptor,
-        AccessModifierDescriptor, AbstractDescriptor, DeclaratorDescriptor, DependentDescriptor, JavaSourceDescriptor {
+        AccessModifierDescriptor, AbstractDescriptor, DependentDescriptor, JavaSourceDescriptor {
 
     /**
      * Return the super class.
