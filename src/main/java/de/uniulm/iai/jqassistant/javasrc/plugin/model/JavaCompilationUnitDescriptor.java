@@ -40,7 +40,8 @@ public interface JavaCompilationUnitDescriptor extends ArtifactFileDescriptor, J
 
     @ResultOf
     @Cypher("match (type:Type)<-[:CONTAINS]-(a:Artifact) where type.fqn={fqn} and id(a) in {dependencies} return type")
-    Query.Result<TypeDescriptor> resolveRequiredType(@Parameter("fqn") String fqn, @Parameter("dependencies") List<? extends ArtifactDescriptor> dependencies);
+    Query.Result<TypeDescriptor> resolveRequiredType(@Parameter("fqn") String fqn, @Parameter("dependencies") List<?
+            extends ArtifactDescriptor> dependencies);
 
     /**
      * Return the list of java types required by this artifact (i.e. which are
