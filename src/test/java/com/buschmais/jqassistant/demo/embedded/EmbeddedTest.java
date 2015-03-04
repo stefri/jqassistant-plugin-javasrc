@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 
+import com.buschmais.jqassistant.core.plugin.api.ScopePluginRepository;
+import com.buschmais.jqassistant.core.plugin.impl.ScopePluginRepositoryImpl;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -53,6 +55,9 @@ public class EmbeddedTest {
      */
     private RulePluginRepository rulePluginRepository;
 
+    private ScopePluginRepository scopePluginRepository;
+
+
     /**
      * Initializes the plugin repositories and creates the store instance and
      * starts it.
@@ -67,6 +72,7 @@ public class EmbeddedTest {
         modelPluginRepository = new ModelPluginRepositoryImpl(pluginConfigurationReader);
         scannerPluginRepository = new ScannerPluginRepositoryImpl(pluginConfigurationReader, Collections.<String, Object> emptyMap());
         rulePluginRepository = new RulePluginRepositoryImpl(pluginConfigurationReader);
+        scopePluginRepository = new ScopePluginRepositoryImpl(pluginConfigurationReader);
 
         // Create a store and start it
         store = new EmbeddedGraphStore("target/store");
@@ -92,7 +98,8 @@ public class EmbeddedTest {
     public void scan() throws PluginRepositoryException {
         store.reset();
 
-        Scanner scanner = new ScannerImpl(store, scannerPluginRepository.getScannerPlugins());
+        Scanner scanner = new ScannerImpl(store, scannerPluginRepository.getScannerPlugins(),
+                scopePluginRepository.getScopes());
 
         store.beginTransaction();
         File file = new File("src/test/data/example/one/Test3.java");
