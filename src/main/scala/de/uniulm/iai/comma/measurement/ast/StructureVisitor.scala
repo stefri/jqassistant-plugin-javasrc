@@ -114,6 +114,7 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
       case JAVA_SOURCE =>
         val visitors = createStructureVisitors(ArtifactType.COMPILATION_UNIT, compilationUnit, None)
         val structure = new Structure(node, node.getText, None, None, visitors)
+        structures(node) = structure
         structureStack.push(structure)
 
       case PACKAGE =>
@@ -155,7 +156,7 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
 
   /** Parse type declarations. */
   private def visitTypeDeclaration(node: EnhancedCommonTree): Unit = {
-    val parent = if (structureStack.top.isCompilationUnit) None else Some(structureStack.top)
+    val parent = if (structureStack.isEmpty || structureStack.top.isCompilationUnit) None else Some(structureStack.top)
     val className = findIdentifier(node).map(_.getText).getOrElse("[NO IDENTIFIER FOUND]")
 
     val fullClassName = parent.map(_.name + "." + className).getOrElse {
