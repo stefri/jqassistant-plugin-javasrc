@@ -20,7 +20,7 @@ package de.uniulm.iai.comma.measurement.ast
 
 import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.{EnhancedCommonTree, JavaLexer}
-import de.uniulm.iai.comma.model.{Value, Change, Measure}
+import de.uniulm.iai.comma.model.{Value, Measure}
 
 import scala.collection.JavaConversions._
 
@@ -37,13 +37,13 @@ object CommentVisitor extends TreeVisitorFactory {
     Measure.BLOCK_COMMENT_LENGTH
   )
 
-  override def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): CommentVisitor = {
-    new CommentVisitor(entity, artifact)
+  override def createVisitor(descriptor: Descriptor, artifact: Option[String]): CommentVisitor = {
+    new CommentVisitor(artifact)
   }
 
 }
 
-class CommentVisitor(entity: Change, artifact: Option[String]) extends TreeVisitor {
+class CommentVisitor(artifact: Option[String]) extends TreeVisitor {
 
   /** Store number of source level line comments. */
   private var _lineCommentCount = 0

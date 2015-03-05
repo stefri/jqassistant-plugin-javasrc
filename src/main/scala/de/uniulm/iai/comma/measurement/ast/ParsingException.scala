@@ -17,6 +17,4 @@
  */
 package de.uniulm.iai.comma.measurement.ast
 
-import de.uniulm.iai.comma.model.Change
-
-class ParsingException(change: Change, msg: String) extends Exception(msg)
+class ParsingException(msg: String) extends Exception(msg)

@@ -22,7 +22,7 @@ import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.TreeWrapper._
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
-import de.uniulm.iai.comma.model.{Value, Change, Measure}
+import de.uniulm.iai.comma.model.{Value, Measure}
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NPathComplexityDescriptor
 
 import scala.collection.JavaConversions._
@@ -31,12 +31,12 @@ object NPathComplexityVisitor extends TreeVisitorFactory {
 
   def measures(): Iterable[Measure] = Vector(Measure.NPATH)
 
-  def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): NPathComplexityVisitor = {
-    new NPathComplexityVisitor(entity, descriptor.asInstanceOf[NPathComplexityDescriptor], artifact)
+  def createVisitor(descriptor: Descriptor, artifact: Option[String]): NPathComplexityVisitor = {
+    new NPathComplexityVisitor(descriptor.asInstanceOf[NPathComplexityDescriptor], artifact)
   }
 }
 
-class NPathComplexityVisitor(entity: Change, descriptor: NPathComplexityDescriptor, artifact: Option[String] = None)
+class NPathComplexityVisitor(descriptor: NPathComplexityDescriptor, artifact: Option[String] = None)
       extends TreeVisitor {
 
   val maxThreshold = 16000

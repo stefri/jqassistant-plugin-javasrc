@@ -20,7 +20,7 @@ package de.uniulm.iai.comma.measurement.ast
 import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
-import de.uniulm.iai.comma.model.{Measure, Value, Change}
+import de.uniulm.iai.comma.model.{Measure, Value}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConversions._
@@ -29,7 +29,7 @@ object FanOutComplexityVisitor extends TreeVisitorFactory {
 
   override def measures() = Vector()
 
-  def apply(entity: Change, artifact: Option[String] = None) = {
+  def apply(artifact: Option[String] = None) = {
     val ignoredClassesBuilder = Set.newBuilder[String]
     ignoredClassesBuilder += "boolean"
     ignoredClassesBuilder += "byte"
@@ -54,15 +54,15 @@ object FanOutComplexityVisitor extends TreeVisitorFactory {
     ignoredClassesBuilder += "Exception"
     ignoredClassesBuilder += "RuntimeException"
     ignoredClassesBuilder += "Throwable"
-    new FanOutComplexityVisitor(entity, artifact, ignoredClassesBuilder.result())
+    new FanOutComplexityVisitor(artifact, ignoredClassesBuilder.result())
   }
 
-  def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): FanOutComplexityVisitor = {
-    apply(entity, artifact)
+  def createVisitor(descriptor: Descriptor, artifact: Option[String]): FanOutComplexityVisitor = {
+    apply(artifact)
   }
 }
 
-class FanOutComplexityVisitor(entity: Change, artifact: Option[String], ignoredClasses: Set[String])
+class FanOutComplexityVisitor(artifact: Option[String], ignoredClasses: Set[String])
     extends TreeVisitor {
 
   val foundClasses = Set.newBuilder[String]

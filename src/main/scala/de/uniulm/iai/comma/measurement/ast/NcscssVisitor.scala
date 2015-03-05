@@ -20,21 +20,21 @@ package de.uniulm.iai.comma.measurement.ast
 import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
-import de.uniulm.iai.comma.model.{Value, Change, Measure}
+import de.uniulm.iai.comma.model.{Value, Measure}
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.NcscssDescriptor
 
 object NcscssVisitor extends TreeVisitorFactory {
 
   override def measures() = Vector(Measure.NCSCSS)
 
-  override def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]): NcscssVisitor = {
-    new NcscssVisitor(entity, descriptor.asInstanceOf[NcscssDescriptor], artifact)
+  override def createVisitor(descriptor: Descriptor, artifact: Option[String]): NcscssVisitor = {
+    new NcscssVisitor(descriptor.asInstanceOf[NcscssDescriptor], artifact)
   }
 
 }
 
 
-class NcscssVisitor(entity: Change, descriptor: NcscssDescriptor, artifact: Option[String]) extends TreeVisitor {
+class NcscssVisitor(descriptor: NcscssDescriptor, artifact: Option[String]) extends TreeVisitor {
 
   var debug = false
   private var counter: Long = 0

@@ -20,14 +20,12 @@ package de.uniulm.iai.comma.measurement.ast
 import java.io.Reader
 
 import de.uniulm.iai.comma.lib.ast.javasource._
-import de.uniulm.iai.comma.model.Change
 import org.antlr.runtime.{ANTLRReaderStream, CommonTokenStream, Token}
 import org.apache.commons.logging.LogFactory
 
 import scala.annotation.tailrec
 import scala.collection.JavaConversions._
 import scala.collection.{SortedMap, mutable}
-import scala.util.{Failure, Success, Try}
 
 trait AstAnalyzer extends TreeWalker {
   private val logger = LogFactory.getLog(this.getClass)
@@ -37,7 +35,7 @@ trait AstAnalyzer extends TreeWalker {
 
   def addVisitor(visitor: TreeVisitor) = visitorReg += visitor
 
-  def runWith(change: Change, src: Reader): Unit = {
+  def runWith(src: Reader): Unit = {
     val input = new ANTLRReaderStream(src)
 
     // Setup lexer to preserve all comments

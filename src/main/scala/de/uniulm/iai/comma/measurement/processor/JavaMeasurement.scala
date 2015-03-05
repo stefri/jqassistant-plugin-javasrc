@@ -17,16 +17,12 @@
  */
 package de.uniulm.iai.comma.measurement.processor
 
-import java.io.{InputStreamReader, File, Reader}
+import java.io.InputStreamReader
 
-import com.buschmais.jqassistant.core.scanner.api.ScannerContext
 import com.buschmais.jqassistant.plugin.common.api.scanner.filesystem.FileResource
 import de.uniulm.iai.comma.measurement.ast._
 import de.uniulm.iai.comma.model._
-import de.uniulm.iai.jqassistant.javasrc.plugin.api.scanner.TypeCache
-import de.uniulm.iai.jqassistant.javasrc.plugin.model.JavaCompilationUnitDescriptor
 import de.uniulm.iai.jqassistant.javasrc.plugin.scanner.ScannerHelper
-import org.apache.commons.logging.LogFactory
 
 object JavaMeasurement {
   def apply(helper: ScannerHelper, item: FileResource, path: String) = {
@@ -36,10 +32,6 @@ object JavaMeasurement {
 
 class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) extends AstAnalyzer {
 
-  // Create a dummy change
-  private val change = Change(item.getFile.getName, path)
-
-
   // Create the java compilation unit descriptor
   val compilationUnitDescriptor = helper.createCompilationUnit(path, item.getFile.getName)
 
@@ -48,7 +40,7 @@ class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) e
    * Structural analysis visitor with structure child visitors
    * Hint: Add additional sub-visitors to acquire metrics based on the internal file structure.
    */
-  private val structureVisitor = new StructureVisitor(change, compilationUnitDescriptor, helper)
+  private val structureVisitor = new StructureVisitor(compilationUnitDescriptor, helper)
   addVisitor(structureVisitor)
 
   // Artifact Class visitors
@@ -112,7 +104,7 @@ class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) e
 
   def run() = try {
     val reader = new InputStreamReader(item.createStream())
-    runWith(change, reader)
+    runWith(reader)
     structureVisitor.getArtifacts
     compilationUnitDescriptor
   }

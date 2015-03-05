@@ -20,21 +20,21 @@ package de.uniulm.iai.comma.measurement.ast
 import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
-import de.uniulm.iai.comma.model.{Value, Change, Measure}
+import de.uniulm.iai.comma.model.{Value, Measure}
 import de.uniulm.iai.jqassistant.javasrc.plugin.model.measure.CyclomaticComplexityDescriptor
 
 object CyclomaticComplexityVisitor extends TreeVisitorFactory {
 
   override def measures() = Vector(Measure.CCN)
 
-  override def createVisitor(entity: Change, descriptor: Descriptor, artifact: Option[String]):
+  override def createVisitor(descriptor: Descriptor, artifact: Option[String]):
       CyclomaticComplexityVisitor = {
-    new CyclomaticComplexityVisitor(entity, descriptor.asInstanceOf[CyclomaticComplexityDescriptor], artifact)
+    new CyclomaticComplexityVisitor(descriptor.asInstanceOf[CyclomaticComplexityDescriptor], artifact)
   }
 
 }
 
-class CyclomaticComplexityVisitor(entity: Change, descriptor: CyclomaticComplexityDescriptor, artifact: Option[String])
+class CyclomaticComplexityVisitor(descriptor: CyclomaticComplexityDescriptor, artifact: Option[String])
       extends TreeVisitor {
 
   private var counter: Long = 1

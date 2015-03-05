@@ -34,7 +34,7 @@ import scala.collection.JavaConversions._
  * to numerous sub-visitors. A sub-visitor does implement the same `TreeVisitor` trait. It should compute
  * a measure that holds if applied in a sub-structural context.
  */
-class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUnitDescriptor, helper: ScannerHelper)
+class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: ScannerHelper)
     extends TreeVisitor with VisitorHelper {
 
   /** Internal storage for all registered artifact type visitor factories */
@@ -221,13 +221,13 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
             // Add descriptor as inner type definition
             p.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
 
-            val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
+            val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
             new Structure(node, fullClassName, Some(cachedType), parent, visitors)
           }
 
           case None    =>
             // This is because there might be more than one java class definition on the outmost level
-            if (changedEntity.path.endsWith("/" + className + ".java")) {
+            if (compilationUnit.getFullQualifiedName.endsWith("/" + className + ".java")) {
 
               // Determine artifact types
               val classType = node.getType match {
@@ -250,7 +250,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
               descr.setAbstract(detectAbstract(node))
               compilationUnit.setMainType(descr)
 
-              val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
+              val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
               new Structure(node, fullClassName, Some(cachedType), None, visitors)
 
             } else {
@@ -275,7 +275,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
               descr.setStatic(detectStatic(node))
               descr.setAbstract(detectAbstract(node))
 
-              val visitors = createStructureVisitors(classType._1, changedEntity, descr, Some(fullClassName))
+              val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
               new Structure(node, fullClassName, Some(cachedType), None, visitors)
             }
         }
@@ -335,7 +335,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         descr.setEndLineNumber(node.getLastLine)
 
 
-        val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, changedEntity, descr, Some(constructorSig))
+        val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, descr, Some(constructorSig))
         val structure = new Structure(node, constructorSig, None, Some(parent), visitors)
         structures(node) = structure
         structureStack.push(structure)
@@ -361,7 +361,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
 
         val visitors =
-          createStructureVisitors(ArtifactType.ANON_INNER_CLASS, changedEntity, descr, Some(descr.getFullQualifiedName))
+          createStructureVisitors(ArtifactType.ANON_INNER_CLASS, descr, Some(descr.getFullQualifiedName))
         val structure = new Structure(node, descr.getFullQualifiedName, Some(cachedType), Some(parent), visitors)
         structures(node) = structure
         structureStack.push(structure)
@@ -387,7 +387,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
         descr.setStartLineNumber(node.getLine)
         descr.setEndLineNumber(node.getLastLine)
 
-        val visitors = createStructureVisitors(ArtifactType.METHOD, changedEntity, descr, Some(methodName))
+        val visitors = createStructureVisitors(ArtifactType.METHOD, descr, Some(methodName))
         val structure = new Structure(node, methodName, None, Some(parent), visitors)
         structures(node) = structure
         structureStack.push(structure)
@@ -491,10 +491,10 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
    * the path. The returned module name contains only the source independent parts of the artifact path.
    **/
   def getModule: Option[String] = {
-    packageName match {
-      case Some(name) => Some(determineModuleName(changedEntity, name))
-      case None       => None
-    }
+    for {
+      name <- packageName
+      module <- determineModuleName(compilationUnit.getFileName, compilationUnit.getFullQualifiedName, name)
+    } yield module
   }
 
 
@@ -515,20 +515,17 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
 
   /** Once a package declaration was found use this method to determine the module name for this artifact */
-  private def determineModuleName(entity: Change, pkgName: String): String = {
-    val packageWithEntity = (if (!pkgName.isEmpty) pkgName + "." else "").replace('.', '/') + entity.name
-    if (entity.path.endsWith(packageWithEntity)) {
-      val packageStart = entity.path.lastIndexOf(packageWithEntity)
-      entity.path.substring(0, packageStart)
-    } else {
-      throw new StructureException(entity, "Package '%s' is not encoded in path '%s'".format(pkgName, entity.path))
-    }
+  private def determineModuleName(fileName: String, path: String, pkgName: String): Option[String] = {
+    val packageWithEntity = (if (!pkgName.isEmpty) pkgName + "." else "").replace('.', '/') + fileName
+    if (path.endsWith(packageWithEntity)) {
+      val packageStart = path.lastIndexOf(packageWithEntity)
+      Some(path.substring(0, packageStart))
+    } else None
   }
 
 
   /** This method provides a save way to get a set with newly created visitors for a detected structure */
   private def createStructureVisitors(artifactType: ArtifactType,
-                                      entity: Change,
                                       descriptor: Descriptor,
                                       artifactName: Option[String]): Set[TreeVisitor] = {
 
@@ -538,7 +535,7 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
     }
 
     visitorFactories(artifactType).map { v =>
-      v.createVisitor(entity, descriptor, artifactName)
+      v.createVisitor(descriptor, artifactName)
     }.toSet
   }
 
