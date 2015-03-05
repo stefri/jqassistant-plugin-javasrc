@@ -6,6 +6,7 @@ import java.util.Collections;
 
 import com.buschmais.jqassistant.core.plugin.api.ScopePluginRepository;
 import com.buschmais.jqassistant.core.plugin.impl.ScopePluginRepositoryImpl;
+import de.uniulm.iai.jqassistant.javasrc.plugin.api.scanner.JavaSourceScope;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -103,7 +104,7 @@ public class EmbeddedTest {
 
         store.beginTransaction();
         File file = new File("src/test/data/example/one/Test3.java");
-        scanner.scan(file, file.getAbsolutePath(), null);
+        scanner.scan(file, file.getAbsolutePath(), JavaSourceScope.CLASSPATH);
         store.commitTransaction();
     }
 
