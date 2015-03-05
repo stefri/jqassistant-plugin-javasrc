@@ -17,8 +17,6 @@
  */
 package de.uniulm.iai.comma.model
 
-import com.buschmais.jqassistant.core.store.api.model.Descriptor
-
 sealed trait ArtifactType extends ArtifactType.Value {
   def name: String
 }
@@ -74,9 +72,4 @@ object Visibility extends Enum[Visibility] {
 
   val values = Vector(PUBLIC, DEFAULT, PROTECTED, PRIVATE, ANONYMOUS)
 }
-
-
-case class Artifact(
-    artifact: String,
-    artifactFqn: String)
 

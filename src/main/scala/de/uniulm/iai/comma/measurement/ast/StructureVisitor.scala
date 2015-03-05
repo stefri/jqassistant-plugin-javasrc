@@ -503,15 +503,14 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
 
 
   /**
-   * Does return a map with all found artifacts and their measured values.
+   * Calls the measuredValues method for each visitor registered with a substructure.
    *
-   * Note: The values do depend on the additional visitors that were registered with this structural
-   * visitor.
+   * It is necessary to run this evaluation method after the structural analysis is complete to
+   * force all substructure visitors to create their nodes in the underlying database.
    */
-  def getArtifacts: Map[Artifact, Set[Value]] = structures.values.map { s =>
-    val cea = Artifact(s.name.stripPrefix(packageName.getOrElse("") + "."), s.name)
-    (cea, s.visitors flatMap { _.measuredValues() })
-  }.toMap
+  def evaluateSubstructureVisitors(): Unit = {
+    structures.values.foreach(s => s.visitors.foreach(_.measuredValues()))
+  }
 
 
   /** Once a package declaration was found use this method to determine the module name for this artifact */

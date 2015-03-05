@@ -105,7 +105,7 @@ class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) e
   def run() = try {
     val reader = new InputStreamReader(item.createStream())
     runWith(reader)
-    structureVisitor.getArtifacts
+    structureVisitor.evaluateSubstructureVisitors()
     compilationUnitDescriptor
   }
 
