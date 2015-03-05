@@ -19,7 +19,7 @@ package de.uniulm.iai.comma.measurement.ast
 
 import com.buschmais.jqassistant.core.store.api.model.Descriptor
 import de.uniulm.iai.comma.lib.ast.javasource.JavaParser._
-import de.uniulm.iai.comma.lib.ast.javasource.{EnhancedCommonTree, JavaLexer}
+import de.uniulm.iai.comma.lib.ast.javasource.EnhancedCommonTree
 import de.uniulm.iai.comma.model._
 import de.uniulm.iai.jqassistant.javasrc.plugin.api.scanner.TypeCache
 import de.uniulm.iai.jqassistant.javasrc.plugin.model._
@@ -111,261 +111,36 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
 
     // Evaluate node type to build source structure
     node.getType match {
-      case JAVA_SOURCE => {
+      case JAVA_SOURCE =>
         val visitors = createStructureVisitors(ArtifactType.COMPILATION_UNIT, compilationUnit, None)
         val structure = new Structure(node, node.getText, None, None, visitors)
         structureStack.push(structure)
-      }
 
-      case PACKAGE => {
-        packageName = Some(
-          stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", "."))
-      }
+      case PACKAGE =>
+        packageName = Some(stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", "."))
 
       case CLASS_DECLARATION
            | INTERFACE
            | ENUM
-           | ANNOTATION_DECL => {
+           | ANNOTATION_DECL =>
+        visitTypeDeclaration(node)
 
-        // Lookup parent
-        val parent = if (structureStack.isEmpty) None else Some(structureStack.top)
+      case ENUM_CLASS_BODY =>
+        visitEnumConstantDeclaration(node)
 
-        // Create new structure
-        val className = findIdentifier(node).map(_.getText).getOrElse("[NO IDENTIFIER FOUND]")
+      case CONSTRUCTOR_DECL =>
+        visitConstructorDeclaration(node)
 
-        val fullClassName = parent.map(_.name + "." + className).getOrElse {
-          packageName.map(_ + "." + className).getOrElse(className)
-        }
-
-        // If a parent is present, store as inner class otherwise as first order class or as main class
-        val structure = parent match {
-          case Some(p) if p.isCompilationUnit => {
-            // Determine inner artifact types
-            val classType = node.getType match {
-              case CLASS_DECLARATION  => (ArtifactType.INNER_CLASS, classOf[ClassDescriptor])
-              case INTERFACE          => (ArtifactType.INNER_INTERFACE, classOf[InterfaceDescriptor])
-              case ENUM               => (ArtifactType.INNER_ENUM, classOf[EnumDescriptor])
-              case ANNOTATION_DECL    => (ArtifactType.INNER_ANNOTATION, classOf[AnnotationDescriptor])
-              case _ => throw new IllegalStateException("Unexpected inner class type: " + node.getType)
-            }
-
-            val visibility = detectVisibility(node)
-
-            // Create new descriptor
-            val cachedType = helper.createType(fullClassName, classType._2)
-            val descr = cachedType.getTypeDescriptor
-            descr.setName(className)
-            descr.setStartLineNumber(node.getLine)
-            descr.setEndLineNumber(node.getLastLine)
-            descr.setVisibility(visibility.name)
-            descr.setFinal(detectFinal(node))
-            descr.setStatic(detectStatic(node))
-            descr.setAbstract(detectAbstract(node))
-
-            // Add descriptor as inner type definition
-            p.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
-
-            val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
-            new Structure(node, fullClassName, Some(cachedType), parent, visitors)
-          }
-
-          case None    =>
-            // This is because there might be more than one java class definition on the outmost level
-            if (compilationUnit.getFullQualifiedName.endsWith("/" + className + ".java")) {
-
-              // Determine artifact types
-              val classType = node.getType match {
-                case CLASS_DECLARATION  => (ArtifactType.ARTIFACT_CLASS, classOf[ClassDescriptor])
-                case INTERFACE          => (ArtifactType.ARTIFACT_INTERFACE, classOf[InterfaceDescriptor])
-                case ENUM               => (ArtifactType.ARTIFACT_ENUM, classOf[EnumDescriptor])
-                case ANNOTATION_DECL    => (ArtifactType.ARTIFACT_ANNOTATION, classOf[AnnotationDescriptor])
-                case _ => throw new IllegalStateException("Unexpected main class type: " + node.getType)
-              }
-
-              val cachedType = helper.createType(fullClassName, classType._2)
-              val descr = cachedType.getTypeDescriptor
-              descr.setDeclarationUnit(compilationUnit)
-              descr.setName(className)
-              descr.setStartLineNumber(node.getLine)
-              descr.setEndLineNumber(node.getLastLine)
-              descr.setVisibility(detectVisibility(node).name)
-              descr.setFinal(detectFinal(node))
-              descr.setStatic(detectStatic(node))
-              descr.setAbstract(detectAbstract(node))
-              compilationUnit.setMainType(descr)
-
-              val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
-              new Structure(node, fullClassName, Some(cachedType), None, visitors)
-
-            } else {
-
-              // Determine artifact types
-              val classType = node.getType match {
-                case CLASS_DECLARATION  => (ArtifactType.CLASS, classOf[ClassDescriptor])
-                case INTERFACE          => (ArtifactType.INTERFACE, classOf[InterfaceDescriptor])
-                case ENUM               => (ArtifactType.ENUM, classOf[EnumDescriptor])
-                case ANNOTATION_DECL    => (ArtifactType.ANNOTATION, classOf[AnnotationDescriptor])
-                case _ => throw new IllegalStateException("Unexpected class type: " + node.getType)
-              }
-
-              val cachedType = helper.createType(fullClassName, classType._2)
-              val descr = cachedType.getTypeDescriptor
-              descr.setDeclarationUnit(compilationUnit)
-              descr.setName(className)
-              descr.setStartLineNumber(node.getLine)
-              descr.setEndLineNumber(node.getLastLine)
-              descr.setVisibility(detectVisibility(node).name)
-              descr.setFinal(detectFinal(node))
-              descr.setStatic(detectStatic(node))
-              descr.setAbstract(detectAbstract(node))
-
-              val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
-              new Structure(node, fullClassName, Some(cachedType), None, visitors)
-            }
-        }
-
-        structures(node) = structure
-        structureStack.push(structure)
-      }
-
-      /* FIXME case ENUM_CLASS_BODY => {
-        val enumDecl = node.getParent
-
-        // Lookup parent
-        val parent = structureStack.top
-
-        // Lookup enum identifier
-        val enumName = findIdentifier(enumDecl).map { i =>
-          parent.name + "." + i.getText
-        } getOrElse {
-          parent.name + ".[NO IDENTIFIER FOUND]"
-        }
-
-        // Create new structure
-        val cachedType = helper.createType(enumName, classOf[EnumConstantDescriptor])
-        val descr = cachedType.getTypeDescriptor
-        //descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
-        descr.setName(enumName)
-        descr.setSignature(enumName)
-        descr.setStartLineNumber(node.getLine)
-        descr.setEndLineNumber(node.getLastLine)
-
-        // Add descriptor as inner type definition
-        // FIXME Should we add an enum constant as field?
-        // parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
-
-        val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, changedEntity, descr, Some(enumName))
-        val structure = new Structure(enumDecl, enumName, None, Some(parent), visitors)
-        structures(enumDecl) = structure
-        structureStack.push(structure)
-      }*/
-
-      case CONSTRUCTOR_DECL => {
-
-        // Lookup parent
-        val parent = structureStack.top
-
-        // Create new structure
-        val constructorSig =
-          addToSignature(node.getChildren.toIndexedSeq, parent.name)
-
-        val descr = helper.constructorDescriptor(parent.cachedType.get, constructorSig)
-        descr.setName(parent.cachedType.get.getTypeDescriptor.getName)
-        descr.setSignature(constructorSig)
-        descr.setAbstract(detectAbstract(node))
-        descr.setFinal(detectFinal(node))
-        descr.setVisibility(detectVisibility(node).name)
-        descr.setStartLineNumber(node.getLine)
-        descr.setEndLineNumber(node.getLastLine)
-
-
-        val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, descr, Some(constructorSig))
-        val structure = new Structure(node, constructorSig, None, Some(parent), visitors)
-        structures(node) = structure
-        structureStack.push(structure)
-      }
-
-      case ANONYMOUS_CLASS_CONSTRUCTOR_CALL => {
-
-        // Lookup parent
-        val parent = structureStack.top
-
-        // Create new structure
-        val parentSimpleClassName = parent.cachedType.get.getTypeDescriptor.getName
-        val index = parent.anonClassCount
-
-        val cachedType = helper.createType(s"${parent.name}.ANON[$index]", classOf[AnonymousClassDescriptor])
-        val descr = cachedType.getTypeDescriptor
-        descr.setIndex(index)
-        descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
-        descr.setStartLineNumber(node.getLine)
-        descr.setEndLineNumber(node.getLastLine)
-
-        // Add descriptor as inner type definition
-        parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
-
-        val visitors =
-          createStructureVisitors(ArtifactType.ANON_INNER_CLASS, descr, Some(descr.getFullQualifiedName))
-        val structure = new Structure(node, descr.getFullQualifiedName, Some(cachedType), Some(parent), visitors)
-        structures(node) = structure
-        structureStack.push(structure)
-      }
+      case ANONYMOUS_CLASS_CONSTRUCTOR_CALL =>
+        visitAnonymousClassDeclaration(node)
 
       case VOID_METHOD_DECL
            | FUNCTION_METHOD_DECL
-           | ANNOTATION_METHOD_DECL => {
+           | ANNOTATION_METHOD_DECL =>
+        visitFunctionDeclaration(node)
 
-        // Lookup parent
-        val parent = structureStack.top
-
-        // Create new structure
-        val methodName =
-          addToSignature(node.getChildren.toIndexedSeq, parent.name + ".")
-
-        val descr = helper.methodDescriptor(parent.cachedType.get, methodName)
-        descr.setName(getFunctionIdentifier(node.getChildren.toIndexedSeq))
-        descr.setAbstract(detectAbstract(node))
-        descr.setFinal(detectFinal(node))
-        descr.setVisibility(detectVisibility(node).name)
-        descr.setStatic(detectStatic(node))
-        descr.setStartLineNumber(node.getLine)
-        descr.setEndLineNumber(node.getLastLine)
-
-        val visitors = createStructureVisitors(ArtifactType.METHOD, descr, Some(methodName))
-        val structure = new Structure(node, methodName, None, Some(parent), visitors)
-        structures(node) = structure
-        structureStack.push(structure)
-      }
-
-      case VAR_DECLARATION => {
-        val parent = structureStack.top
-
-        // Only include fields and no variable declarations inside of methods!
-        if (parent.cachedType.isDefined) {
-          val visibility = detectVisibility(node).name
-          val isFinal = detectFinal(node)
-          val isStatic = detectStatic(node)
-          val isTransient = detectTransient(node)
-          val isVolatile = detectVolatile(node)
-          val fieldType = detectType(node)
-          val fieldNameNodes = detectVariableDeclarators(node)
-
-          fieldNameNodes.foreach { n =>
-            val signature = n.getChild(0).getText
-            val descr = helper.fieldDescriptor(parent.cachedType.get, signature)
-            descr.setName(signature)
-            descr.setVisibility(visibility)
-            descr.setFinal(isFinal)
-            descr.setStatic(isStatic)
-            descr.setTransient(isTransient)
-            descr.setVolatile(isVolatile)
-            descr.setStartLineNumber(node.getLine)
-
-            val typeDescr = helper.resolveType(fieldType.get.getText, parent.cachedType.get).getTypeDescriptor
-            descr.setType(typeDescr)
-          }
-        }
-      }
+      case VAR_DECLARATION =>
+        visitVariableDeclaration(node)
 
       case _ => // Silently ignore all other tokens
     }
@@ -376,6 +151,236 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
       s.visitors.foreach(_.visit(node, s.equals(structureStack.top)))
     }
   }
+
+
+  /** Parse type declarations. */
+  private def visitTypeDeclaration(node: EnhancedCommonTree): Unit = {
+    val parent = if (structureStack.top.isCompilationUnit) None else Some(structureStack.top)
+    val className = findIdentifier(node).map(_.getText).getOrElse("[NO IDENTIFIER FOUND]")
+
+    val fullClassName = parent.map(_.name + "." + className).getOrElse {
+      packageName.map(_ + "." + className).getOrElse(className)
+    }
+
+    // If a parent is present, store as inner class otherwise as first order class or as main class
+    val structure = parent match {
+      case Some(p) =>
+        visitInnerTypeDeclaration(node, p, className, fullClassName)
+
+      case None =>
+        visitOuterTypeDeclaration(node, className, fullClassName)
+    }
+
+    structures(node) = structure
+    structureStack.push(structure)
+  }
+
+
+  /** Parse outer types declarations and create appropriate nodes. */
+  private def visitOuterTypeDeclaration(node: EnhancedCommonTree, className: String, fullClassName: String): Structure = {
+
+    // Determine artifact types
+    val classType = node.getType match {
+      case CLASS_DECLARATION => (ArtifactType.CLASS, classOf[ClassDescriptor])
+      case INTERFACE => (ArtifactType.INTERFACE, classOf[InterfaceDescriptor])
+      case ENUM => (ArtifactType.ENUM, classOf[EnumDescriptor])
+      case ANNOTATION_DECL => (ArtifactType.ANNOTATION, classOf[AnnotationDescriptor])
+      case _ => throw new IllegalStateException("Unexpected class type: " + node.getType)
+    }
+
+    val cachedType = helper.createType(fullClassName, classType._2)
+    val descr = cachedType.getTypeDescriptor
+    descr.setDeclarationUnit(compilationUnit)
+    descr.setName(className)
+    descr.setStartLineNumber(node.getLine)
+    descr.setEndLineNumber(node.getLastLine)
+    descr.setVisibility(detectVisibility(node).name)
+    descr.setFinal(detectFinal(node))
+    descr.setStatic(detectStatic(node))
+    descr.setAbstract(detectAbstract(node))
+
+    // There might be more than one java artifact declaration on the outermost level
+    if (compilationUnit.getFullQualifiedName.endsWith("/" + className + ".java")) {
+      compilationUnit.setMainType(descr)
+    }
+
+    val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
+    new Structure(node, fullClassName, Some(cachedType), None, visitors)
+  }
+
+
+  /** Parse inner type declarations and create appropriate nodes. */
+  private def visitInnerTypeDeclaration(node: EnhancedCommonTree, parent: Structure, className: String,
+                                       fullClassName: String): Structure = {
+    // Determine inner artifact types
+    val classType = node.getType match {
+      case CLASS_DECLARATION  => (ArtifactType.INNER_CLASS, classOf[ClassDescriptor])
+      case INTERFACE          => (ArtifactType.INNER_INTERFACE, classOf[InterfaceDescriptor])
+      case ENUM               => (ArtifactType.INNER_ENUM, classOf[EnumDescriptor])
+      case ANNOTATION_DECL    => (ArtifactType.INNER_ANNOTATION, classOf[AnnotationDescriptor])
+      case _ => throw new IllegalStateException("Unexpected inner class type: " + node.getType)
+    }
+
+    val visibility = detectVisibility(node)
+
+    // Create new descriptor
+    val cachedType = helper.createType(fullClassName, classType._2)
+    val descr = cachedType.getTypeDescriptor
+    descr.setName(className)
+    descr.setStartLineNumber(node.getLine)
+    descr.setEndLineNumber(node.getLastLine)
+    descr.setVisibility(visibility.name)
+    descr.setFinal(detectFinal(node))
+    descr.setStatic(detectStatic(node))
+    descr.setAbstract(detectAbstract(node))
+
+    // Add descriptor as inner type definition
+    parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+
+    val visitors = createStructureVisitors(classType._1, descr, Some(fullClassName))
+    new Structure(node, fullClassName, Some(cachedType), Some(parent), visitors)
+  }
+
+
+  /** Parse enum constant declarations and create appropriate nodes. */
+  private def visitEnumConstantDeclaration(node: EnhancedCommonTree): Unit = {
+    val enumDecl = node.getParent
+
+    // Lookup parent
+    val parent = structureStack.top
+
+    // Lookup enum identifier
+    val enumName = findIdentifier(enumDecl).map { i =>
+      parent.name + "." + i.getText
+    } getOrElse {
+      parent.name + ".[NO IDENTIFIER FOUND]"
+    }
+
+    // Create new structure
+    val cachedType = helper.createType(enumName, classOf[EnumConstantDescriptor])
+    val descr = cachedType.getTypeDescriptor
+    //descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
+    descr.setName(enumName)
+    descr.setSignature(enumName)
+    descr.setStartLineNumber(node.getLine)
+    descr.setEndLineNumber(node.getLastLine)
+
+    // Add descriptor as inner type definition
+    // FIXME Should we add an enum constant as field?
+    // parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+
+    val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, descr, Some(enumName))
+    val structure = new Structure(enumDecl, enumName, None, Some(parent), visitors)
+    structures(enumDecl) = structure
+    structureStack.push(structure)
+  }
+
+
+  /** Parse constructor declarations and create appropriate nodes. */
+  private def visitConstructorDeclaration(node: EnhancedCommonTree): Unit = {
+    val parent = structureStack.top
+
+    // Create new structure
+    val constructorSig =
+      addToSignature(node.getChildren.toIndexedSeq, parent.name)
+
+    val descr = helper.constructorDescriptor(parent.cachedType.get, constructorSig)
+    descr.setName(parent.cachedType.get.getTypeDescriptor.getName)
+    descr.setSignature(constructorSig)
+    descr.setAbstract(detectAbstract(node))
+    descr.setFinal(detectFinal(node))
+    descr.setVisibility(detectVisibility(node).name)
+    descr.setStartLineNumber(node.getLine)
+    descr.setEndLineNumber(node.getLastLine)
+
+
+    val visitors = createStructureVisitors(ArtifactType.CONSTRUCTOR, descr, Some(constructorSig))
+    val structure = new Structure(node, constructorSig, None, Some(parent), visitors)
+    structures(node) = structure
+    structureStack.push(structure)
+  }
+
+
+  /** Parse anonymous class declarations and create appropriate nodes. */
+  private def visitAnonymousClassDeclaration(node: EnhancedCommonTree): Unit = {
+    val parent = structureStack.top
+
+    // Create new structure
+    val parentSimpleClassName = parent.cachedType.get.getTypeDescriptor.getName
+    val index = parent.anonClassCount
+
+    val cachedType = helper.createType(s"${parent.name}.ANON[$index]", classOf[AnonymousClassDescriptor])
+    val descr = cachedType.getTypeDescriptor
+    descr.setIndex(index)
+    descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
+    descr.setStartLineNumber(node.getLine)
+    descr.setEndLineNumber(node.getLastLine)
+
+    // Add descriptor as inner type definition
+    parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+
+    val visitors =
+      createStructureVisitors(ArtifactType.ANON_INNER_CLASS, descr, Some(descr.getFullQualifiedName))
+    val structure = new Structure(node, descr.getFullQualifiedName, Some(cachedType), Some(parent), visitors)
+    structures(node) = structure
+    structureStack.push(structure)
+  }
+
+
+  /** Parse function declarations and create appropriate nodes. */
+  private def visitFunctionDeclaration(node: EnhancedCommonTree): Unit = {
+    val parent = structureStack.top
+
+    // Create new structure
+    val methodName = addToSignature(node.getChildren.toIndexedSeq, parent.name + ".")
+
+    val descr = helper.methodDescriptor(parent.cachedType.get, methodName)
+    descr.setName(getFunctionIdentifier(node.getChildren.toIndexedSeq))
+    descr.setAbstract(detectAbstract(node))
+    descr.setFinal(detectFinal(node))
+    descr.setVisibility(detectVisibility(node).name)
+    descr.setStatic(detectStatic(node))
+    descr.setStartLineNumber(node.getLine)
+    descr.setEndLineNumber(node.getLastLine)
+
+    val visitors = createStructureVisitors(ArtifactType.METHOD, descr, Some(methodName))
+    val structure = new Structure(node, methodName, None, Some(parent), visitors)
+    structures(node) = structure
+    structureStack.push(structure)
+  }
+
+
+  /** Parse variable declarations and create appropriate nodes. */
+  private def visitVariableDeclaration(node: EnhancedCommonTree): Unit = {
+    val parent = structureStack.top
+
+    // Only include fields and no variable declarations inside of methods!
+    if (parent.cachedType.isDefined) {
+      val visibility = detectVisibility(node).name
+      val isFinal = detectFinal(node)
+      val isStatic = detectStatic(node)
+      val isTransient = detectTransient(node)
+      val isVolatile = detectVolatile(node)
+      val fieldType = detectType(node)
+      val fieldNameNodes = detectVariableDeclarators(node)
+
+      fieldNameNodes.foreach { n =>
+        val signature = n.getChild(0).getText
+        val descr = helper.fieldDescriptor(parent.cachedType.get, signature)
+        descr.setName(signature)
+        descr.setVisibility(visibility)
+        descr.setFinal(isFinal)
+        descr.setStatic(isStatic)
+        descr.setTransient(isTransient)
+        descr.setVolatile(isVolatile)
+        descr.setStartLineNumber(node.getLine)
+
+        val typeDescr = helper.resolveType(fieldType.get.getText, parent.cachedType.get).getTypeDescriptor
+        descr.setType(typeDescr)
+      }
+    }
+  }
+
 
   /** Return all measured values of all visitors for each detected structure. */
   override def measuredValues() = {

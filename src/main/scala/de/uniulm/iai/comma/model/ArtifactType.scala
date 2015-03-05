@@ -23,10 +23,6 @@ sealed trait ArtifactType extends ArtifactType.Value {
 
 object ArtifactType extends Enum[ArtifactType] {
   case object COMPILATION_UNIT    extends ArtifactType { val name = "Compilation Unit"}
-  case object ARTIFACT_CLASS      extends ArtifactType { val name = "Artifact Class" }
-  case object ARTIFACT_INTERFACE  extends ArtifactType { val name = "Artifact Interface" }
-  case object ARTIFACT_ENUM       extends ArtifactType { val name = "Artifact Enumeration" }
-  case object ARTIFACT_ANNOTATION extends ArtifactType { val name = "Artifact Annotation" }
   case object CLASS               extends ArtifactType { val name = "Class" }
   case object INNER_CLASS         extends ArtifactType { val name = "Inner Class" }
   case object ANON_INNER_CLASS    extends ArtifactType { val name = "Anonymous Inner Class" }
@@ -42,10 +38,6 @@ object ArtifactType extends Enum[ArtifactType] {
 
   val values = Vector(
     COMPILATION_UNIT,
-    ARTIFACT_CLASS,
-    ARTIFACT_INTERFACE,
-    ARTIFACT_ENUM,
-    ARTIFACT_ANNOTATION,
     CLASS,
     INNER_CLASS,
     ANON_INNER_CLASS,
