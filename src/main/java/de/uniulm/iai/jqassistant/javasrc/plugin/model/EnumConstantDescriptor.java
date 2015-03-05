@@ -7,6 +7,5 @@ import com.buschmais.xo.neo4j.api.annotation.Label;
  * @author Steffen Kram
  */
 @Label("EnumConstant")
-public interface EnumConstantDescriptor extends MemberDescriptor, NamedDescriptor, TypedDescriptor,
-        BlockLineSpanDescriptor {
+public interface EnumConstantDescriptor extends TypeDescriptor {
 }

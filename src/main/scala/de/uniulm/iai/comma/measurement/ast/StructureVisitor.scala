@@ -259,15 +259,12 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
     // Create new structure
     val cachedType = helper.createType(enumName, classOf[EnumConstantDescriptor])
     val descr = cachedType.getTypeDescriptor
-    //descr.setType(parent.descriptor.asInstanceOf[TypeDescriptor])
     descr.setName(enumName)
-    descr.setSignature(enumName)
     descr.setStartLineNumber(node.getLine)
     descr.setEndLineNumber(node.getLastLine)
 
     // Add descriptor as inner type definition
-    // FIXME Should we add an enum constant as field?
-    // parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
+    parent.cachedType.get.getTypeDescriptor.getDeclaredInnerTypes.add(descr)
 
     val visitors = createStructureVisitors(ArtifactType.ENUM_CONST, descr, Some(enumName))
     val structure = new Structure(enumDecl, enumName, None, Some(parent), visitors)

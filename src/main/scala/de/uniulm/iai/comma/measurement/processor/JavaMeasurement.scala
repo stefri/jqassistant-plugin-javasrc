@@ -46,18 +46,6 @@ class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) e
   // Compilation unit visitors
   //structureVisitor.addVisitorFactory(ArtifactType.COMPILATION_UNIT, CommentVisitor)
 
-  // Artifact Class visitors
-  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_CLASS, NcscssVisitor)
-
-  // Artifact Interface visitors
-  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_INTERFACE, NcscssVisitor)
-
-  // Artifact Enum visitors
-  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_ENUM, NcscssVisitor)
-
-  // Artifact Annotation visitors
-  structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_ANNOTATION, NcscssVisitor)
-
   // Class visitors
   structureVisitor.addVisitorFactory(ArtifactType.CLASS, NcscssVisitor)
 
