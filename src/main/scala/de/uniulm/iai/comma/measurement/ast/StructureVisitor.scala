@@ -66,45 +66,15 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
                            val parent: Option[Structure],
                            val visitors: Set[TreeVisitor]) {
 
+    /** Check if this structure is the compilation unit. */
+    def isCompilationUnit: Boolean = { node.getType == JAVA_SOURCE }
+
     /** Anonymous inner classes are numbered based on this counter which is reset for each structure */
     private var anonCount = 0
     def anonClassCount: Int = {
       anonCount += 1
       anonCount
     }
-
-    private var _lineCommentCount = 0
-    def increaseLineCommentCount() = _lineCommentCount += 1
-    def lineCommentCount = _lineCommentCount
-
-    private var _lineCommentLength = 0l
-    def increaseLineCommentLength(size: Int) = _lineCommentLength += size
-    def lineCommentLength = _lineCommentLength
-
-    private var _blockCommentCount = 0
-    def increaseBlockCommentCount() = _blockCommentCount += 1
-    def blockCommentCount = _blockCommentCount
-
-    private var _blockCommentLines = 0
-    def increaseBlockCommentLines(lines: Int) = _blockCommentLines += lines
-    def blockCommentLines = _blockCommentLines
-
-    private var _blockCommentLength = 0l
-    def increaseBlockCommentLength(size: Int) = _blockCommentLength += size
-    def blockCommentLength = _blockCommentLength
-
-    private var _javadocCommentCount = 0
-    def increaseJavadocCommentCount() = _javadocCommentCount += 1
-    def javadocCommentCount = _javadocCommentCount
-
-    private var _javadocCommentLength = 0
-    def increaseJavadocCommentLength(size: Int) = _javadocCommentLength += size
-    def javadocCommentLength = _javadocCommentLength
-
-    private var _javadocCommentLines = 0
-    def increaseJavadocCommentLines(lines: Int) = _javadocCommentLines += lines
-    def javadocCommentLines = _javadocCommentLines
-
 
     /** Check if the given node is a sub-node of this structure. Used to reduce the structure stack. */
     def containsNode(node: EnhancedCommonTree): Boolean = {
@@ -126,38 +96,6 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
   /** Store the package identifier of this file if one is present */
   private var packageName: Option[String] = None
 
-  /** Store number of source level line comments. */
-  private var _lineCommentCount = 0
-  def lineCommentCount = _lineCommentCount
-
-  /** Store total length of source level line comments. */
-  private var _lineCommentLength = 0l
-  def lineCommentLength = _lineCommentLength
-
-  /** Store total number of block comments. */
-  private var _blockCommentCount = 0
-  def blockCommentCount = _blockCommentCount
-
-  /** Store total number of source level block comment lines. */
-  private var _blockCommentLines = 0
-  def blockCommentLines = _blockCommentLines
-
-  /** Store total length of source level block comments. */
-  private var _blockCommentLength = 0l
-  def blockCommentLength = _blockCommentLength
-
-  /** Store total number of javadoc comments. */
-  private var _javadocCommentCount = 0
-  def javadocCommentCount = _javadocCommentCount
-
-  /** Store total number of source level javadoc comment lines. */
-  private var _javadocCommentLines = 0
-  def javadocCommentLines = _javadocCommentLines
-
-  /** Store total length of source level javadoc comments. */
-  private var _javadocCommentLength = 0l
-  def javadocCommentLength = _javadocCommentLength
-
   /** Maps each structure to its first tree node. Use the tree node to parse the structure again */
   private val structures = collection.mutable.HashMap.empty[Tree, Structure]
 
@@ -173,6 +111,12 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
 
     // Evaluate node type to build source structure
     node.getType match {
+      case JAVA_SOURCE => {
+        val visitors = createStructureVisitors(ArtifactType.COMPILATION_UNIT, compilationUnit, None)
+        val structure = new Structure(node, node.getText, None, None, visitors)
+        structureStack.push(structure)
+      }
+
       case PACKAGE => {
         packageName = Some(
           stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", "."))
@@ -195,7 +139,7 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
 
         // If a parent is present, store as inner class otherwise as first order class or as main class
         val structure = parent match {
-          case Some(p) => {
+          case Some(p) if p.isCompilationUnit => {
             // Determine inner artifact types
             val classType = node.getType match {
               case CLASS_DECLARATION  => (ArtifactType.INNER_CLASS, classOf[ClassDescriptor])
@@ -426,29 +370,6 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
       case _ => // Silently ignore all other tokens
     }
 
-    // Add comment count and length to top most structure on stack, because this can not be covered by comment visitor
-    if (structureStack.isEmpty) {
-      (node.getPrecedingComments ++ node.getFollowingComments).foreach { t =>
-        t.getType match {
-          case JavaLexer.LINE_COMMENT =>
-            _lineCommentCount += 1
-            _lineCommentLength += t.getText.length
-
-          case JavaLexer.BLOCK_COMMENT =>
-            _blockCommentCount += 1
-            _blockCommentLines += t.getText.linesIterator.size
-            _blockCommentLength += t.getText.length
-
-          case JavaLexer.JAVADOC_COMMENT =>
-            _javadocCommentCount += 1
-            _javadocCommentLines += t.getText.linesIterator.size
-            _javadocCommentLength += t.getText.length
-
-          case _ => // ignore, ... should be never reached anyway.
-        }
-      }
-    }
-
     // Dispatch to child visitors for each active structure on our stack, some visitors are only called
     // if it is the topmost structure. The latter decision is up to the visitor implementation.
     structureStack.foreach { s =>
@@ -458,45 +379,9 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
 
   /** Return all measured values of all visitors for each detected structure. */
   override def measuredValues() = {
-
-    // Add comments not associated with any artifact as global values.
-    val comments = Vector.newBuilder[Value]
-    if (lineCommentCount > 0) {
-      Value(None, Measure.LINE_COMMENT_COUNT, lineCommentCount)
-      Value(None, Measure.LINE_COMMENT_LENGTH, lineCommentLength)
-    }
-    if (blockCommentCount > 0) {
-      Value(None, Measure.BLOCK_COMMENT_COUNT, blockCommentCount)
-      Value(None, Measure.BLOCK_COMMENT_LINES, blockCommentLines)
-      Value(None, Measure.BLOCK_COMMENT_LENGTH, blockCommentLength)
-    }
-    if (javadocCommentCount > 0) {
-      Value(None, Measure.JAVADOC_COUNT, javadocCommentCount)
-      Value(None, Measure.JAVADOC_LINES, javadocCommentLines)
-      Value(None, Measure.JAVADOC_LENGTH, javadocCommentLength)
-    }
-
-    // And also include all values for all sub-visitors
     val res = structures flatMap { _._2.visitors flatMap { _.measuredValues() }}
-
-    comments.result ++ res.toIndexedSeq
+    res.toIndexedSeq
   }
-
-
-  /**
-   * Does return the module name for the analyzed artifact.
-   *
-   * The module name is a computed property. It is constructed from the changed entity path which is the
-   * module base name. The artifacts package name is converted back into a path structure and striped from
-   * the path. The returned module name contains only the source independent parts of the artifact path.
-   **/
-  def getModule: Option[String] = {
-    for {
-      name <- packageName
-      module <- determineModuleName(compilationUnit.getFileName, compilationUnit.getFullQualifiedName, name)
-    } yield module
-  }
-
 
   /** Does return the package name for the analyzed artifact if a package was found. */
   def getPackage: Option[String] = packageName
@@ -512,17 +397,6 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
     structures.values.foreach(s => s.visitors.foreach(_.measuredValues()))
   }
 
-
-  /** Once a package declaration was found use this method to determine the module name for this artifact */
-  private def determineModuleName(fileName: String, path: String, pkgName: String): Option[String] = {
-    val packageWithEntity = (if (!pkgName.isEmpty) pkgName + "." else "").replace('.', '/') + fileName
-    if (path.endsWith(packageWithEntity)) {
-      val packageStart = path.lastIndexOf(packageWithEntity)
-      Some(path.substring(0, packageStart))
-    } else None
-  }
-
-
   /** This method provides a save way to get a set with newly created visitors for a detected structure */
   private def createStructureVisitors(artifactType: ArtifactType,
                                       descriptor: Descriptor,
@@ -537,5 +411,4 @@ class StructureVisitor(compilationUnit: JavaCompilationUnitDescriptor, helper: S
       v.createVisitor(descriptor, artifactName)
     }.toSet
   }
-
 }

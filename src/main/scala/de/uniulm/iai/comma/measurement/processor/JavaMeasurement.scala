@@ -43,6 +43,9 @@ class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) e
   private val structureVisitor = new StructureVisitor(compilationUnitDescriptor, helper)
   addVisitor(structureVisitor)
 
+  // Compilation unit visitors
+  //structureVisitor.addVisitorFactory(ArtifactType.COMPILATION_UNIT, CommentVisitor)
+
   // Artifact Class visitors
   structureVisitor.addVisitorFactory(ArtifactType.ARTIFACT_CLASS, NcscssVisitor)
 

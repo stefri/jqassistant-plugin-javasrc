@@ -22,6 +22,7 @@ sealed trait ArtifactType extends ArtifactType.Value {
 }
 
 object ArtifactType extends Enum[ArtifactType] {
+  case object COMPILATION_UNIT    extends ArtifactType { val name = "Compilation Unit"}
   case object ARTIFACT_CLASS      extends ArtifactType { val name = "Artifact Class" }
   case object ARTIFACT_INTERFACE  extends ArtifactType { val name = "Artifact Interface" }
   case object ARTIFACT_ENUM       extends ArtifactType { val name = "Artifact Enumeration" }
@@ -40,6 +41,7 @@ object ArtifactType extends Enum[ArtifactType] {
   case object ENUM_CONST          extends ArtifactType { val name = "Enum Constant" }
 
   val values = Vector(
+    COMPILATION_UNIT,
     ARTIFACT_CLASS,
     ARTIFACT_INTERFACE,
     ARTIFACT_ENUM,
@@ -57,19 +59,3 @@ object ArtifactType extends Enum[ArtifactType] {
     METHOD,
     ENUM_CONST)
 }
-
-
-sealed trait Visibility extends Visibility.Value {
-  def name: String
-}
-
-object Visibility extends Enum[Visibility] {
-  case object PUBLIC    extends Visibility { val name = "public" }
-  case object DEFAULT   extends Visibility { val name = "default" }
-  case object PROTECTED extends Visibility { val name = "protected" }
-  case object PRIVATE   extends Visibility { val name = "private" }
-  case object ANONYMOUS extends Visibility { val name = "anonymous" }
-
-  val values = Vector(PUBLIC, DEFAULT, PROTECTED, PRIVATE, ANONYMOUS)
-}
-
