@@ -210,7 +210,6 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
             // Create new descriptor
             val cachedType = helper.createType(fullClassName, classType._2)
             val descr = cachedType.getTypeDescriptor
-            descr.setDeclarationUnit(compilationUnit)
             descr.setName(className)
             descr.setStartLineNumber(node.getLine)
             descr.setEndLineNumber(node.getLastLine)
@@ -353,7 +352,6 @@ class StructureVisitor(changedEntity: Change, compilationUnit: JavaCompilationUn
 
         val cachedType = helper.createType(s"${parent.name}.ANON[$index]", classOf[AnonymousClassDescriptor])
         val descr = cachedType.getTypeDescriptor
-        descr.setDeclarationUnit(compilationUnit)
         descr.setIndex(index)
         descr.setName(s"$parentSimpleClassName.ANON[${descr.getIndex}]")
         descr.setStartLineNumber(node.getLine)
