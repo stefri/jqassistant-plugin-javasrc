@@ -16,15 +16,9 @@ class ImportVisitor(helper: ScannerHelper, compilationUnit: JavaCompilationUnitD
 
   override def visit(node: EnhancedCommonTree): Unit = {
     node.getType match {
-      case IMPORT => {
+      case IMPORT =>
         val i = stringifyNodes(node.getChildren.toIndexedSeq, "").trim.replace(" ", ".")
-        /* FIXME I should add imports as compilation unit dependency, however a compilation unit is not a type!
-        val dependency =  helper.resolveType(i, ???)
-          context.getStore.create(classOf[IncompleteTypeDescriptor])
-        dependency.setName(i.split('.').reverse.head)
-        dependency.setFullQualifiedName(i)
-        dependency.setRequiredBy(compilationUnit)*/
-      }
+        helper.resolveImport(i, compilationUnit)
 
       case _ => // ignore all other tokens
     }

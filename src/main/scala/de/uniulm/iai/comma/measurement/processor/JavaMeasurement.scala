@@ -41,7 +41,7 @@ class JavaMeasurement(helper: ScannerHelper, item: FileResource, path: String) e
 
 
   // Create the java compilation unit descriptor
-  val compilationUnitDescriptor = helper.compilationUnit(path, item.getFile.getName)
+  val compilationUnitDescriptor = helper.createCompilationUnit(path, item.getFile.getName)
 
 
   /*

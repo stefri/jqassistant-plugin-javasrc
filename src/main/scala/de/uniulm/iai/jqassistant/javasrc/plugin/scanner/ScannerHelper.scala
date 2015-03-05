@@ -17,12 +17,22 @@ object ScannerHelper {
  */
 class ScannerHelper(scannerContext: ScannerContext) {
 
-  def compilationUnit(fullQualifiedName: String, name: String): JavaCompilationUnitDescriptor = {
+  def createCompilationUnit(fullQualifiedName: String, name: String): JavaCompilationUnitDescriptor = {
     val compilationUnit = scannerContext.getStore.create(classOf[JavaCompilationUnitDescriptor])
     compilationUnit.setFullQualifiedName(fullQualifiedName)
     compilationUnit.setFileName(name)
     compilationUnit.setMayCompile(true)
     compilationUnit
+  }
+
+  /** Return the type descriptor for the given import name. */
+  def resolveImport(fullQualifiedName: String, dependentCompilationUnit: JavaCompilationUnitDescriptor):
+      TypeCache.CachedType[TypeDescriptor] = {
+    val cachedType = typeResolver.resolve(fullQualifiedName, scannerContext)
+    if (!dependentCompilationUnit.getRequiresTypes.contains(cachedType.getTypeDescriptor)) {
+      dependentCompilationUnit.getRequiresTypes.add(cachedType.getTypeDescriptor)
+    }
+    cachedType
   }
 
   /** Return the type descriptor for the given type name. */
