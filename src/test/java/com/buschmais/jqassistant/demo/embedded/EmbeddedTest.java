@@ -71,7 +71,7 @@ public class EmbeddedTest {
         // Init plugin repositories
         PluginConfigurationReader pluginConfigurationReader = new PluginConfigurationReaderImpl();
         modelPluginRepository = new ModelPluginRepositoryImpl(pluginConfigurationReader);
-        scannerPluginRepository = new ScannerPluginRepositoryImpl(pluginConfigurationReader, Collections.<String, Object> emptyMap());
+        scannerPluginRepository = new ScannerPluginRepositoryImpl(pluginConfigurationReader);
         rulePluginRepository = new RulePluginRepositoryImpl(pluginConfigurationReader);
         scopePluginRepository = new ScopePluginRepositoryImpl(pluginConfigurationReader);
 
@@ -99,7 +99,7 @@ public class EmbeddedTest {
     public void scan() throws PluginRepositoryException {
         store.reset();
 
-        Scanner scanner = new ScannerImpl(store, scannerPluginRepository.getScannerPlugins(),
+        Scanner scanner = new ScannerImpl(store, scannerPluginRepository.getScannerPlugins(Collections.<String, Object>emptyMap()),
                 scopePluginRepository.getScopes());
 
         store.beginTransaction();
